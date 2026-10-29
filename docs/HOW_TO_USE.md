@@ -55,14 +55,7 @@ The **Build progress** ticks show how far along you are:
 5. **Conveyor running** - everything is known; belt and products start moving
 
 ## 5. Reading the results page
-- **Your conveyor in 3D:** the finished conveyor, running at your speed and spacing.
-  - **Turn it:** drag with the mouse or one finger. **Zoom:** scroll wheel or pinch. **Move it:** Shift+drag, right-drag, or two fingers. Double-click refits.
-  - **Buttons:** Isometric, Top, Front, Back, Inlet end, Outlet end (front/back/ends follow the direction your conveyor runs), Fit conveyor, Whole floor, Orthographic (true-proportion flat views), Auto-rotate, Full screen, Save image (PNG).
-  - **Tick boxes:** Dimensions, Products, Frame/supports/drive, Floor and obstacles. Switch Dimensions off for a cleaner picture.
-  - **Colours of dimensions:** black = you entered it, red = calculated from your entries, grey = indicative (not yet specified by Ultraplast).
-  - **Red tags S1, S2...** are the route segments; the **Dimension schedule** table below the picture lists each one (length, radius, sweep, rise, heights).
-  - Play/Pause, Restart and playback speed run the products; counters show products on the belt and delivered.
-  - The tab **Plan view (2D) and side profile** keeps the flat drawing.
+- **Your conveyor, running:** Play/Pause, Restart, playback speed, **Zoom to conveyor**. Counters show products on the belt and delivered.
 - **Recommended conveyor type** and the reasons. You may choose a different type in Step 4; the tool will flag problems.
 - **Checks and flags:** red = problem to fix, yellow = check, grey = note.
 - **Space and route, Product and throughput, Belt/chain and width:** each value has a label:
@@ -99,13 +92,3 @@ Expected: path 12.00 m, conveyor running at 10.00 m/min, 150 mm spacing.
 - Edit product data only in `products.js`; settings in `config.js`.
 - Verify every value in `docs/VERIFICATION_CHECKLIST.md` before public launch.
 - Set the enquiry service URL in `config.js`; set the WhatsApp number only after it is confirmed.
-
-
-## Colours, product movement and falling products
-1. Step 2: choose a **Product colour**. Step 4: choose a **Belt colour** and (optional) the **friction μ** if you know it.
-2. On the results page, in the 3D model, raise the **belt speed** box above the "highest safe speed" shown - products start sliding/tipping off the curve and fall to the floor. Lower it again and they stay on.
-3. **Stop belt (test)** shows whether tall or slippery products slide or tip when the belt stops. The friction values are generic - confirm with Ultraplast engineering before relying on them.
-
-## Engineering drawing (AutoCAD)
-Results page -> **Engineering drawing (CAD)**: *Download 2D DXF*, *Download 3D DXF*, or the A3 *SVG sheet*. In AutoCAD use OPEN (or INSERT) on the .dxf file; units are millimetres.
-Turn layers on/off: DIM_ENTERED (black), DIM_CALC (red) and DIM_IND (grey) show where each dimension came from. Layers ending _IND are indicative drawing aids only.

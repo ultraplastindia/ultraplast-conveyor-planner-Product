@@ -6,7 +6,7 @@
  */
 (function () {
   'use strict';
-  var C = window.UCPCalc, P = window.UCPProducts, R = window.UCPReport, E = window.UCPEnquiry, S = window.UCPSchematic, SIM = window.UCPSim, V3 = window.UCP3D, K = window.UCPCosting, CAD = window.UCPCad, PH = window.UCPPhysics, sim = null, view3 = null, planStarted = false;
+  var C = window.UCPCalc, P = window.UCPProducts, R = window.UCPReport, E = window.UCPEnquiry, S = window.UCPSchematic, SIM = window.UCPSim, sim = null;
   var CFG = window.UCP_CONFIG || {};
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
@@ -28,7 +28,7 @@
         fragility: 'low', temperature: '', foodContact: 'none', cleaning: 'dry', orientation: 'length_leading', gap: '', accumulation: 'none',
         rate: '', rateUnit: 'per_min', speed: '', hoursPerDay: '', shifts: '', operation: 'continuous', feeding: 'manual', discharge: 'manual', upstream: '', downstream: '', electrical: '',
         categoryPref: 'auto', material: 'unknown', beltWidth: '', routeLength: '', lanes: '1', transfers: '0', infeedPoints: '1', dischargePoints: '1',
-        beltColor: '', productColor: '', friction: '', washdown: 'none', guarding: 'basic', guideRails: false, pitch: '', sprocketTeeth: '', pulleyDia: '', centreDistance: '', drives: ''
+        washdown: 'none', guarding: 'basic', guideRails: false, pitch: '', sprocketTeeth: '', pulleyDia: '', centreDistance: '', drives: ''
       },
       conditions: ['dry'], obstacles: [], segments: [], contact: { name: '', company: '', email: '', mobile: '+91 ', city: '', state: '', timeline: '', budget: '', comments: '', consent: false },
       result: null, enquiry: { status: 'idle', message: '' }
@@ -86,13 +86,6 @@
     return '<div class="field ' + (o.cls || '') + (o.adv ? ' adv' : '') + '"><label for="' + id + '">' + esc(label) + unit + req + '</label>' + tipBtn(o.tip) + ctl + hint + '<span class="err" id="e_' + name + '" role="alert"></span></div>';
   }
 
-  function colourField(name, label, palette, hint) {
-    var v = state.values[name] || '';
-    return '<div class="field full"><label>' + esc(label) + '</label><div class="swatches" role="group" aria-label="' + esc(label) + '">' +
-      '<button type="button" class="sw auto' + (v === '' ? ' on' : '') + '" data-swatch-for="' + name + '" data-val="" title="Automatic">Auto</button>' +
-      palette.map(function (c) { return '<button type="button" class="sw' + (v.toLowerCase() === c[0] ? ' on' : '') + '" style="background:' + c[0] + '" data-swatch-for="' + name + '" data-val="' + c[0] + '" title="' + esc(c[1]) + '" aria-label="' + esc(c[1]) + '"></button>'; }).join('') +
-      '<label class="swpick">Custom <input type="color" data-name="' + name + '" value="' + (/^#[0-9a-f]{6}$/i.test(v) ? v : '#808080') + '" aria-label="' + esc(label) + ' custom colour"></label></div>' + (hint ? '<small class="hint">' + esc(hint) + '</small>' : '') + '</div>';
-  }
   var HEADINGS = [['0', 'East (→ along floor length)'], ['90', 'North (↑ along floor width)'], ['180', 'West (←)'], ['270', 'South (↓)']];
   var LAYOUTS = [
     ['straight', 'Straight line', 'One straight run.'], ['L', 'L-shaped', 'Two runs joined by a 90° curve.'], ['U', 'U-shaped', 'Out, turn, across, turn, back.'],
@@ -137,7 +130,6 @@
       h.push(field('handling', 'Product category', { type: 'select', options: [['', 'Select...']].concat(P.handlingTypes.map(function (t) { return [t.id, t.label]; })), tip: 'Used to suggest a conveyor type (rigid flat-base items suit rollers; bottles often suit slat chains).' }));
       h.push(field('prodLength', 'Product length', { req: true, ph: 'e.g. 200' })); h.push(field('prodWidth', 'Product width', { req: true, ph: 'e.g. 100' }));
       h.push(field('prodHeight', 'Product height', { req: true, ph: 'e.g. 250' }));
-      h.push(colourField('productColor', 'Product colour (for the 3D view)', P.productColours, 'Only changes how the product is drawn.'));
       h.push(field('weight', 'Weight per product', { type: 'weight', req: true, ph: 'e.g. 520', hint: 'Typical single-product weight.' }));
       h.push(field('maxWeight', 'Maximum product weight', { type: 'weight', hint: 'Heaviest product expected. Optional.' }));
       h.push(field('fragility', 'Fragility', { type: 'select', options: [['low', 'Robust'], ['medium', 'Moderately fragile'], ['high', 'Fragile']] }));
@@ -171,8 +163,6 @@
       h.push(field('categoryPref', 'Conveyor category', { type: 'select', options: [['auto', 'Automatic recommendation']].concat(P.categories.map(function (c) { return [c.id, c.name]; })), tip: 'Pick one to override the recommendation. The tool will flag incompatibilities.' }));
       h.push(field('material', 'Belt / chain material (if known)', { type: 'select', options: P.materials.map(function (m) { return [m.id, m.label]; }) }));
       h.push(field('beltWidth', 'Conveyor width', { hint: 'Leave blank for engineering to recommend.', ph: 'e.g. 200' }));
-      h.push(colourField('beltColor', 'Belt colour (for the 3D view)', P.beltColours, 'Automatic uses a default for the belt type. Only changes the drawing.'));
-      h.push(field('friction', 'Belt-to-product friction μ (optional)', { kind: 'num', hint: 'Leave blank to use the generic value for the belt type. Type a measured value to test your own belt: it decides when products slide, tip or slip.', ph: 'e.g. 0.3' }));
       h.push(field('lanes', 'Number of lanes', { hint: 'Products side by side.' })); h.push(field('transfers', 'Transfer points', { hint: 'Where product passes from one conveyor to another.' }));
       h.push(field('infeedPoints', 'Infeed points')); h.push(field('dischargePoints', 'Discharge points'));
       h.push('</div></fieldset>');
@@ -247,7 +237,6 @@
   function render(focus) {
     renderProgress();
     if (sim && state.step !== 5) { sim.destroy(); sim = null; }
-    if (view3 && state.step !== 5) { view3.destroy(); view3 = null; }
     if (liveSim && state.step === 5) { liveSim.destroy(); liveSim = null; }
     var wiz = $('#wizardWrap'), resWrap = $('#resultsWrap');
     document.body.classList.toggle('on-results', state.step === 5);
@@ -271,7 +260,7 @@
   /* ------------------------------------------------------------ live panel */
   var liveTimer = null;
   function live() { clearTimeout(liveTimer); liveTimer = setTimeout(doLive, 120); }
-  var liveSim = null, liveTime = 0, liveView = null;
+  var liveSim = null, liveTime = 0;
   function productPreview(inp) {
     if (!(inp.prodLength > 0 && inp.prodWidth > 0)) return '';
     var L = inp.prodLength, Wd = inp.prodWidth, k = Math.min(200 / L, 90 / Wd), w = L * k, h = Wd * k;
@@ -280,7 +269,7 @@
   }
   function doLive() {
     if (state.step === 5) return;
-    if (liveSim) { var st0 = liveSim.state(); liveTime = st0.time; liveView = liveSim.view(); liveSim.destroy(); liveSim = null; }
+    if (liveSim) { liveTime = liveSim.state().time; liveSim.destroy(); liveSim = null; }
     var inp = C.normalize(raw()), res;
     try { res = C.analyse(inp, P); } catch (e) { $('#liveSchem').innerHTML = '<p class="err">Preview unavailable: ' + esc(e.message) + '</p>'; return; }
     var plan = simPlan(inp, res), pathOk = res.path && res.path.points.length > 1, prodOk = inp.prodLength > 0 && inp.prodWidth > 0 && inp.prodHeight > 0 && inp.weight > 0, prodKnown = res.throughput.productPitchMm;
@@ -290,9 +279,8 @@
     ];
     var host = $('#liveSchem');
     host.innerHTML = '<ul class="build" aria-label="Build progress">' + done.map(function (d) { return '<li class="' + (d[1] ? 'on' : '') + '"><span aria-hidden="true">' + (d[1] ? '✓' : '○') + '</span> ' + d[0] + '</li>'; }).join('') + '</ul>' +
-      (state.step === 2 ? productPreview(inp) : '') + '<div id="live3d"></div><p class="note legend3d">3D view: black dimensions are entered by you, red are calculated, grey are indicative (frame, supports, drive).</p>';
-    try { liveSim = V3.create($('#live3d'), v3dOpts(inp, res, plan, { compact: true, startTime: liveTime, view: liveView })); }
-    catch (e) { $('#live3d').innerHTML = '<p class="err">3D preview unavailable: ' + esc(e.message) + '</p>'; }
+      (state.step === 2 ? productPreview(inp) : '') + simSvg(inp, res, plan) + (pathOk ? S.LEGEND_CV : S.LEGEND);
+    if (!plan.why && prodKnown) liveSim = SIM.create(host, simCtx(inp, res, plan, { compact: true, startTime: liveTime }));
     var rows = [];
     if (res.floor.area !== null) rows.push(['Floor area', num2(res.floor.area) + ' m²', 'calc']);
     if (res.path) rows.push(['Route path length' + (res.path.complete ? '' : ' (partial)'), fmtLen(res.path.total), res.path.complete ? 'calc' : 'review']);
@@ -359,12 +347,7 @@
       (rec.selectedId !== rec.primaryId ? '<p class="note">You selected this type. Automatic suggestion was: <b>' + esc(cats[rec.primaryId].name) + '</b>.</p>' : '') +
       '<p>' + esc(rec.selected.summary) + '</p><h4>Why</h4><ul>' + rec.reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' +
       (rec.alternatives.length ? '<h4>Alternatives to discuss</h4><p>' + rec.alternatives.map(function (a) { return esc(cats[a].name); }).join(' &middot; ') + '</p>' : '') + '</section>');
-    h.push('<section class="card" id="simCard"><h3>Your conveyor in 3D</h3><p class="note">Built from your answers: floor, route, curve radii, inclines, heights, belt width, product size and spacing. Drag to turn it, scroll or pinch to zoom, Shift+drag to move. Use Top, Front and Side for flat views.</p>' +
-      '<div class="tabs" role="tablist" aria-label="Conveyor views"><button type="button" role="tab" class="tab" data-tab="3d" aria-selected="true">3D model</button><button type="button" role="tab" class="tab" data-tab="plan" aria-selected="false">Plan view (2D) and side profile</button></div>' +
-      '<div id="v3dMsg"></div><div id="v3dHost"></div><div id="simHost" hidden></div></section>');
-    h.push(cadCard(inp, res));
-    h.push(scheduleHtml(inp, res));
-    if (costEnabled()) h.push('<section class="card" id="costCard"></section>');
+    h.push('<section class="card" id="simCard"><h3>Your conveyor, running</h3><p class="note">Built from your answers: route, width, speed, product size and spacing. Press Pause to inspect.</p><div id="simHost"></div></section>');
     // space and route
     var pa = res.path;
     h.push('<section class="card"><h3>Space and route</h3><div class="metrics">' +
@@ -411,9 +394,9 @@
     // downloads + enquiry
     h.push('<section class="card" id="actions"><h3>Download your project summary</h3><div class="btnrow"><button type="button" class="btn primary" id="btnPdf">Download PDF report</button><button type="button" class="btn" id="btnJson">Download JSON summary</button><button type="button" class="btn ghost" id="btnPrint">Print</button></div><p class="note" id="dlMsg" role="status"></p></section>');
     h.push(enquiryHtml());
-    if (sim) { sim.destroy(); sim = null; } if (view3) { view3.destroy(); view3 = null; } planStarted = false;
+    if (sim) { sim.destroy(); sim = null; }
     wrap.innerHTML = h.join('');
-    start3d(inp, res); if (costEnabled()) initCost(inp, res);
+    startSim(inp, res);
     updateEnquiryStatus();
   }
 
@@ -437,155 +420,13 @@
     var c = { points: res.path.points, v: plan.speed, pitchMm: t.productPitchMm, alongMm: along, acrossMm: t.acrossMm, lanes: t.lanes, speedAssumed: !(inp.speed && !isNaN(inp.speed)) };
     for (var k in extra) c[k] = extra[k]; return c;
   }
-  function behaviourOf(inp, res) {
-    var B = P.behaviour, type = PH.beltTypeOf(inp, res.recommendation && res.recommendation.selectedId), m = PH.muFor(B, type, inp.conditions, parseFloat(inp.friction));
-    return { mu: m.mu, basis: m.basis, cogRatio: B.cogRatio, margin: B.marginRatio, stopTimeS: B.stopTimeS, type: type };
-  }
-  function beltRgbOf(inp, res) {
-    var c = V3.hexToRgb(inp.beltColor); if (c) return c;
-    var def = { pp: '#2f6fb5', slat: '#8a9099', ss: '#b9bfc6', pu: '#f2f2f0', other: '#3a404a' }; return V3.hexToRgb(def[behaviourOf(inp, res).type]);
-  }
-  function v3dScene(inp, res, plan, detail) {
-    var t = res.throughput, gap = inp.gap && !isNaN(inp.gap) ? inp.gap : 0, along = t.productPitchMm ? t.productPitchMm - gap : null;
-    return {
-      floorL: inp.floorLength, floorW: inp.floorWidth, workingH: inp.workingHeight > 0 ? inp.workingHeight / 1000 : null, obstacles: inp.obstacles, path: res.path,
-      inletMm: inp.inletHeight, dischargeMm: inp.dischargeHeight, beltWidthM: plan.widthM, widthNote: plan.widthNote, pulleyDiaMm: inp.pulleyDia, pitchMm: inp.pitch,
-      legSpacingMm: P.engineering.legSpacingMm, detail: detail, beltRgb: beltRgbOf(inp, res),
-      prod: { alongMm: along, acrossMm: t.acrossMm, heightMm: inp.prodHeight, pitchMm: t.productPitchMm, lanes: t.lanes },
-      fmt: fmtLen, fmtMm: fmtMm
-    };
-  }
-  /* ---- CAD-style drawing: 2D views + 3D model, DXF / SVG downloads ---- */
-  var cadModel = null;
-  function cadBuild(inp, res) {
-    var plan = simPlan(inp, res), raw = (state.result && state.result.raw) || {};
-    return CAD.build(v3dScene(inp, res, plan, true), { title: (raw.projectName || 'Conveyor') + ' - general arrangement', date: new Date().toISOString().slice(0, 10) });
-  }
-  function cadCard(inp, res) {
-    var m; try { m = cadModel = cadBuild(inp, res); } catch (e) { cadModel = null; return '<section class="card"><h3>Engineering drawing (CAD)</h3><p class="banner warn">The drawing could not be generated (' + esc(e.message) + ').</p></section>'; }
-    if (!m.ok) return '<section class="card"><h3>Engineering drawing (CAD)</h3><p class="note">' + esc(m.notes[m.notes.length - 1]) + '</p></section>';
-    return '<section class="card" id="cadCard"><h3>Engineering drawing (CAD)</h3><p class="note">A drawing sheet made from your entries: plan view, developed side elevation, end view, floor layout and a 3D view, with length, width, radius, angle, rise and height dimensions. <b>Black</b> = entered, <b>red</b> = calculated, <b>grey</b> = indicative (frame, legs, motor are drawing aids, not Ultraplast engineering data).</p>' +
-      '<div class="cadbtns"><button type="button" class="btn ghost" id="cadDxf2">Download 2D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadDxf3">Download 3D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadSvg">Download drawing sheet (SVG, A3)</button></div>' +
-      '<div class="cadsheet" role="img" aria-label="Engineering drawing sheet">' + CAD.toSVG(m) + '</div>' +
-      '<p class="note">DXF files are full size in millimetres. Dimensions are lines and text, not editable AutoCAD dimension objects. Open the SVG in a browser and use Print &rarr; Save as PDF for a PDF. Engineering review required before any manufacture.</p></section>';
-  }
-  function v3dOpts(inp, res, plan, extra) {
-    var t = res.throughput, o = { scene: v3dScene(inp, res, plan, !(extra && extra.compact)), speedMPerMin: plan.speed, pitchMm: t.productPitchMm, lanes: t.lanes, behaviour: behaviourOf(inp, res), productRgb: V3.hexToRgb(inp.productColor) };
-    for (var k in extra) o[k] = extra[k]; return o;
-  }
-  function start3d(inp, res) {
-    var host = $('#v3dHost'); if (!host) return;
-    var plan = simPlan(inp, res);
-    if (plan.why) $('#v3dMsg').innerHTML = '<p class="banner warn">' + esc(plan.why) + '</p>';
-    try { view3 = V3.create(host, v3dOpts(inp, res, plan, {})); }
-    catch (e) { host.innerHTML = ''; $('#v3dMsg').innerHTML = '<p class="banner warn">The 3D view could not start in this browser (' + esc(e.message) + '). The 2D plan view is shown instead.</p>'; selectTab('plan'); }
-  }
-  function startPlan(inp, res) {
-    var host = $('#simHost'); if (!host) return; planStarted = true;
+  function startSim(inp, res) {
+    var host = $('#simHost'); if (!host) return;
     var plan = simPlan(inp, res);
     host.innerHTML = simSvg(inp, res, plan) + S.LEGEND_CV;
     if (plan.why) { host.insertAdjacentHTML('afterbegin', '<p class="banner warn">' + esc(plan.why) + '</p>'); return; }
     host.insertAdjacentHTML('afterbegin', '<p class="note">Conveyor drawn at ' + esc(fmtMm(plan.widthM * 1000)) + ' wide (' + esc(plan.widthNote) + ').</p>');
     sim = SIM.create(host, simCtx(inp, res, plan, {}));
-  }
-  function selectTab(name) {
-    var tabs = document.querySelectorAll('#simCard .tab'), i;
-    for (i = 0; i < tabs.length; i++) tabs[i].setAttribute('aria-selected', tabs[i].getAttribute('data-tab') === name ? 'true' : 'false');
-    var h3 = $('#v3dHost'), hp = $('#simHost'), msg = $('#v3dMsg'); if (!h3 || !hp) return;
-    h3.hidden = name !== '3d'; msg.hidden = name !== '3d'; hp.hidden = name !== 'plan';
-    var r = state.result;
-    if (name === 'plan') { if (view3) view3.pause(); if (!planStarted && r) startPlan(r.inp, r.res); else if (sim) sim.play(); }
-    else { if (sim) sim.pause(); if (view3) { view3.render(); view3.play(); } }
-  }
-  function scheduleHtml(inp, res) {
-    var plan = simPlan(inp, res), d = V3.describe(v3dScene(inp, res, plan, true));
-    if (!d.segments.length) return '';
-    var rows = d.segments.map(function (s) {
-      var kind = s.type === 'straight' ? 'Straight' : s.type === 'curve' ? 'Curve ' + (s.direction === 'right' ? 'right' : 'left') : (s.riseM < 0 ? 'Decline' : 'Incline');
-      var det = s.type === 'curve' ? 'Radius ' + fmtMm(s.radiusM * 1000) + ', sweep ' + num2(s.angleDeg, 1) + '°' : s.type === 'incline' ? 'Run ' + fmtLen(s.horizontalM) + ', rise ' + fmtMm(s.riseM * 1000) + ', slope ' + num2(Math.abs(s.slopeDeg), 1) + '°' : 'Horizontal run ' + fmtLen(s.horizontalM);
-      return '<tr><td data-l="No.">S' + s.no + '</td><td data-l="Type">' + kind + '</td><td data-l="Length along belt">' + esc(fmtLen(s.lengthM)) + '</td><td data-l="Details">' + esc(det) + '</td><td data-l="Height at start">' + esc(fmtMm(s.startZ * 1000)) + '</td><td data-l="Height at end">' + esc(fmtMm(s.endZ * 1000)) + '</td></tr>';
-    }).join('');
-    var e = d.elevations, bits = [];
-    bits.push(['Total belt path length', fmtLen(d.overall.pathM) + (d.overall.complete ? '' : ' (route incomplete)')]);
-    bits.push(['Plan envelope incl. belt width (approx.)', fmtLen(d.overall.planLengthM) + ' × ' + fmtLen(d.overall.planWidthM)]);
-    bits.push(['Belt width', fmtMm(d.belt.widthM * 1000) + ' (' + d.belt.note + ')']);
-    bits.push(['Conveying surface height', e.basis === 'illustrative' ? 'Not entered (drawn at an illustrative ' + fmtMm(e.inletM * 1000) + ')' : fmtMm(e.minM * 1000) + ' to ' + fmtMm(e.maxM * 1000) + ' above floor (' + e.basis + ')']);
-    if (e.topOfProductM !== null) bits.push(['Top of product at highest point', fmtMm(e.topOfProductM * 1000)]);
-    if (d.product) bits.push(['Product (along × across × height)', fmtMm(d.product.alongMm) + ' × ' + fmtMm(d.product.acrossMm) + (d.product.heightMm ? ' × ' + fmtMm(d.product.heightMm) : '') + (d.product.lanes > 1 ? ', ' + d.product.lanes + ' lanes' : '')]);
-    return '<section class="card" id="schedCard"><h3>Dimension schedule (as drawn)</h3><p class="note">Every figure here is taken from your entries or calculated from them, and is what the 3D model is built from. Segment numbers match the red tags in the 3D view.</p>' +
-      '<div class="tablewrap"><table><thead><tr><th>No.</th><th>Type</th><th>Length along belt</th><th>Details</th><th>Height at start</th><th>Height at end</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
-      '<dl class="kv">' + bits.map(function (b) { return '<div><dt>' + esc(b[0]) + '</dt><dd>' + esc(b[1]) + '</dd></div>'; }).join('') + '</dl>' +
-      (d.notes.length ? '<ul>' + d.notes.map(function (n) { return '<li>' + esc(n) + '</li>'; }).join('') + '</ul>' : '') + '</section>';
-  }
-
-  /* ------------------------------------------------ internal costing (rate card entered by staff; no prices ship with the tool) */
-  var costCard = null, costCtx = null, COST_KEY = 'ucp.rateCard';
-  function costEnabled() { var c = CFG.costing || {}; return !!(K && (c.enabled || /[?&]costing=1\b/.test(window.location.search))); }
-  function costQ() { var plan = simPlan(costCtx.inp, costCtx.res), sc = V3.buildScene(v3dScene(costCtx.inp, costCtx.res, plan, false)); return K.quantities(costCtx.inp, costCtx.res, { legs: sc.empty ? null : sc.legCount, beltWidthM: plan.widthM }); }
-  function initCost(inp, res) {
-    costCtx = { inp: inp, res: res };
-    if (!costCard) { try { var sv = window.localStorage.getItem(COST_KEY); if (sv) costCard = K.importCard(JSON.parse(sv)); } catch (e) { } }
-    if (!costCard) costCard = K.templateCard();
-    initCostEvents($('#costCard')); renderCost();
-  }
-  function renderCost() {
-    var host = $('#costCard'); if (!host) return;
-    var remembered = false; try { remembered = !!window.localStorage.getItem(COST_KEY); } catch (e) { }
-    var drv = Object.keys(K.DRIVERS);
-    host.innerHTML = '<h3>Cost estimate (internal)</h3><p class="note"><b>Internal use only - not a quotation.</b> This tool contains no prices: enter your own rates below, or load a rate card file. Rates are never added to the PDF, the JSON summary or the enquiry sent to Ultraplast. Quantities come from the calculated route; type a quantity in the Qty box to override it.</p>' +
-      '<div class="btnrow"><label class="btn ghost sm" for="costFile">Load rate card</label><input type="file" id="costFile" accept="application/json,.json" hidden><button type="button" class="btn ghost sm" id="costSave">Save rate card</button><button type="button" class="btn ghost sm" id="costAdd">Add line</button><button type="button" class="btn ghost sm" id="costCsv">Download costing CSV</button><button type="button" class="btn ghost sm" id="costClear">Clear all rates</button>' +
-      '<label class="chk"><input type="checkbox" id="costRemember"' + (remembered ? ' checked' : '') + '> Remember this rate card in this browser</label></div><p class="err" id="costMsg" role="alert"></p>' +
-      '<div class="tablewrap"><table class="costtbl"><thead><tr><th>On</th><th>Item</th><th>Based on</th><th>Qty</th><th>Rate (' + esc(costCard.currency) + ' per unit)</th><th>Amount</th><th></th></tr></thead><tbody>' +
-      costCard.lines.map(function (l, i) {
-        return '<tr><td data-l="On"><input type="checkbox" data-cost="enabled" data-i="' + i + '"' + (l.enabled ? ' checked' : '') + ' aria-label="Include line"></td>' +
-          '<td data-l="Item"><input type="text" data-cost="label" data-i="' + i + '" value="' + esc(l.label) + '"></td>' +
-          '<td data-l="Based on"><select data-cost="driver" data-i="' + i + '">' + drv.map(function (d) { return '<option value="' + d + '"' + (d === l.driver ? ' selected' : '') + '>' + esc(K.DRIVERS[d].label) + '</option>'; }).join('') + '</select></td>' +
-          '<td data-l="Qty"><input type="number" step="any" min="0" inputmode="decimal" data-cost="qty" data-i="' + i + '" value="' + (l.qty === null || l.qty === undefined ? '' : esc(l.qty)) + '"><span class="note" data-qs="' + i + '"></span></td>' +
-          '<td data-l="Rate"><input type="number" step="any" min="0" inputmode="decimal" data-cost="rate" data-i="' + i + '" value="' + (l.rate === null || l.rate === undefined ? '' : esc(l.rate)) + '" placeholder="enter rate"></td>' +
-          '<td data-l="Amount" data-amt="' + i + '">-</td><td><button type="button" class="btn ghost sm" data-cost-del="' + i + '" aria-label="Remove line">Remove</button></td></tr>';
-      }).join('') + '</tbody></table></div>' +
-      '<div class="kv">' + [['wastage', 'Wastage %'], ['overhead', 'Overhead %'], ['margin', 'Margin %'], ['discount', 'Discount %'], ['tax', 'GST / tax %']].map(function (x) { return '<div><dt><label for="cp_' + x[0] + '">' + x[1] + '</label></dt><dd><input id="cp_' + x[0] + '" type="number" step="any" min="0" data-cost-pct="' + x[0] + '" value="' + esc(costCard.percents[x[0]]) + '"></dd></div>'; }).join('') + '</div>' +
-      '<div id="costTotals" aria-live="polite"></div>';
-    refreshCost();
-  }
-  function refreshCost() {
-    var q = costQ(), r = K.compute(costCard, q), cur = r.currency, m = function (v) { return esc(K.fmtMoney(v, cur)); };
-    r.lines.forEach(function (l, i) {
-      var a = document.querySelector('[data-amt="' + i + '"]'), qs = document.querySelector('[data-qs="' + i + '"]'); if (!a) return;
-      a.textContent = l.status === 'ok' ? K.fmtMoney(l.amount, cur) : l.status === 'off' ? 'off' : l.status === 'rate-missing' ? 'rate needed' : 'qty unknown';
-      var calcQ = q[l.driver]; qs.textContent = l.qtySource === 'manual' ? ' manual ' + l.unit : (calcQ === null || calcQ === undefined ? ' unknown' : ' = ' + (Math.round(calcQ * 100) / 100) + ' ' + l.unit);
-    });
-    $('#costTotals').innerHTML = (r.complete ? '' : '<p class="banner warn">Total is INCOMPLETE: ' + r.missing.length + ' line(s) need a rate or quantity. ' + esc(r.missing.slice(0, 3).join('; ')) + (r.missing.length > 3 ? '...' : '') + '</p>') +
-      '<dl class="kv"><div><dt>Subtotal</dt><dd>' + m(r.subtotal) + '</dd></div><div><dt>Wastage</dt><dd>' + m(r.wastage) + '</dd></div><div><dt>Overhead</dt><dd>' + m(r.overhead) + '</dd></div><div><dt>Margin</dt><dd>' + m(r.margin) + '</dd></div><div><dt>Discount</dt><dd>- ' + m(r.discount) + '</dd></div><div><dt>Tax</dt><dd>' + m(r.tax) + '</dd></div><div><dt><b>Total' + (r.complete ? '' : ' (incomplete)') + '</b></dt><dd><b>' + m(r.total) + '</b></dd></div></dl>' +
-      '<p class="note">Internal estimate from your own rates and the calculated quantities (belt, frame, legs and ends are indicative, taken from the planner, not from a final design). Motor, drive, structure and controls need Ultraplast engineering. Not a quotation.</p>';
-    costCtx.last = r; persistCost();
-  }
-  function persistCost() { var cb = $('#costRemember'); try { if (cb && cb.checked) window.localStorage.setItem(COST_KEY, JSON.stringify(costCard)); } catch (e) { } }
-  function costMsg(t) { var e = $('#costMsg'); if (e) e.textContent = t || ''; }
-  function onCostInput(e) {
-    var t = e.target, k = t.getAttribute('data-cost'), pk = t.getAttribute('data-cost-pct'); if (!costCard) return;
-    if (pk) { costCard.percents[pk] = t.value === '' ? 0 : Number(t.value); refreshCost(); return; }
-    if (!k) return; var i = +t.getAttribute('data-i'), l = costCard.lines[i]; if (!l) return;
-    if (k === 'enabled') l.enabled = t.checked; else if (k === 'label') l.label = t.value; else if (k === 'driver') { l.driver = t.value; l.unit = K.DRIVERS[t.value].unit; }
-    else { l[k] = t.value === '' ? null : Number(t.value); if (l[k] !== null && (isNaN(l[k]) || l[k] < 0)) { l[k] = null; t.value = ''; costMsg('Enter a number, zero or more.'); return; } }
-    costMsg(''); refreshCost();
-  }
-  function onCostClick(e) {
-    var t = e.target.closest ? e.target.closest('button') : null; if (!t || !costCard) return;
-    var del = t.getAttribute('data-cost-del');
-    if (del !== null) { costCard.lines.splice(+del, 1); renderCost(); return; }
-    if (t.id === 'costAdd') { costCard.lines.push({ id: 'c' + Date.now(), label: 'New item', driver: 'manual', unit: 'nos', rate: null, qty: null, enabled: true, note: '' }); renderCost(); }
-    else if (t.id === 'costSave') download('Ultraplast-rate-card.json', JSON.stringify(costCard, null, 2), 'application/json');
-    else if (t.id === 'costClear') { costCard.lines.forEach(function (l) { l.rate = null; }); renderCost(); }
-    else if (t.id === 'costCsv') { var r = K.compute(costCard, costQ()); download('Ultraplast-cost-estimate-' + slug(costCtx.raw || (state.result && state.result.raw && state.result.raw.projectName)) + '.csv', K.toCsv(costCard, r, state.result && state.result.raw.projectName), 'text/csv'); }
-  }
-  function onCostFile(e) {
-    var f = e.target.files && e.target.files[0]; if (!f) return; if (f.size > 500000) { costMsg('File too large for a rate card.'); return; }
-    var rd = new FileReader(); rd.onload = function () { try { costCard = K.importCard(JSON.parse(String(rd.result))); renderCost(); costMsg(''); } catch (er) { costMsg('Could not load: ' + er.message); } }; rd.readAsText(f);
-  }
-  function initCostEvents(host) {
-    host.addEventListener('input', onCostInput); host.addEventListener('change', function (e) { if (e.target.id === 'costFile') onCostFile(e); else if (e.target.id === 'costRemember') { try { if (e.target.checked) persistCost(); else window.localStorage.removeItem(COST_KEY); } catch (er) { } } else onCostInput(e); });
-    host.addEventListener('click', onCostClick);
   }
 
   function enquiryHtml() {
@@ -760,13 +601,6 @@
   function onClick(e) {
     var t = e.target.closest ? e.target.closest('button, a') : null; if (!t) { $$('.tip.open').forEach(function (x) { x.classList.remove('open'); }); return; }
     if (t.classList.contains('tip')) { var was = t.classList.contains('open'); $$('.tip.open').forEach(function (x) { x.classList.remove('open'); }); if (!was) t.classList.add('open'); return; }
-    if (t.id === 'cadDxf2' || t.id === 'cadDxf3' || t.id === 'cadSvg') {
-      var r0 = state.result, nm = slug(r0 && r0.raw && r0.raw.projectName); if (!cadModel) return;
-      try { if (t.id === 'cadDxf2') download('Ultraplast-' + nm + '-2D.dxf', CAD.toDXF2D(cadModel), 'application/dxf'); else if (t.id === 'cadDxf3') download('Ultraplast-' + nm + '-3D.dxf', CAD.toDXF3D(cadModel), 'application/dxf'); else download('Ultraplast-' + nm + '-drawing.svg', CAD.toSVG(cadModel), 'image/svg+xml'); msg('Drawing downloaded.'); } catch (er) { msg('Could not create the drawing file: ' + er.message); }
-      return;
-    }
-    var swf = t.getAttribute('data-swatch-for'); if (swf !== null) { state.values[swf] = t.getAttribute('data-val'); state.dirty = true; Array.prototype.forEach.call(document.querySelectorAll('[data-swatch-for="' + swf + '"]'), function (b) { b.classList.toggle('on', b === t); }); live(); return; }
-    var tb = t.closest ? t.closest('[data-tab]') : null; if (tb) { selectTab(tb.getAttribute('data-tab')); return; }
     var g = t.getAttribute('data-goto'); if (g) { go(+g); return; }
     if (t.id === 'addObs') { state.obstacles.push({ name: '', x: '', y: '', w: '', d: '' }); $('#obsBox').innerHTML = obstaclesHtml(); var last = $$('#obsBox .row').pop(); if (last) last.querySelector('input').focus(); }
     var d = t.getAttribute('data-del-obs'); if (d !== null) { state.obstacles.splice(+d, 1); $('#obsBox').innerHTML = obstaclesHtml(); live(); }
@@ -802,18 +636,8 @@
   function init() {
     if (!C || !P || !R || !E || !S) { document.getElementById('app').innerHTML = '<p class="banner bad">The calculator could not start because a script failed to load. Please reload the page.</p>'; return; }
     var logo = $('#logo'); if (logo) { logo.src = P.company.logoUrl; logo.addEventListener('error', function () { logo.hidden = true; $('#logoText').hidden = false; }); }
-    var SH = window.UCPSheets;
-    var go0 = function (res) {
-      var ds = $('#dataSource');
-      if (ds && res) {
-        if (res.status === 'loaded' || res.status === 'partial') ds.textContent = 'Product data: ' + P.meta.dataSource + (res.unverified ? ' - ' + res.unverified + ' value(s) not yet marked verified by engineering.' : '.') + (res.failed.length ? ' (' + res.failed.join(', ') + ' tab unavailable - built-in values used.)' : '');
-        else if (res.status === 'failed') ds.textContent = 'Product data: Google Sheet unavailable - built-in values used.';
-        if (res.warnings && res.warnings.length && window.console) console.warn('Sheet data notes:', res.warnings);
-      }
-      bind(); syncHeader(); render(false);
-      document.documentElement.classList.add('js-ready');
-    };
-    if (SH && CFG.sheets) SH.load(CFG.sheets, P).then(go0, function () { go0(null); }); else go0(null);
+    bind(); syncHeader(); render(false);
+    document.documentElement.classList.add('js-ready');
   }
   window.UCPApp = { state: function () { return state; }, raw: raw };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();

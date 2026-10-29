@@ -200,31 +200,6 @@
     ],
 
     /*
-     * PRODUCT BEHAVIOUR (used only by the 3D animation and the "Product behaviour check").
-     * These are GENERIC reference values for an illustrative simulation - NOT Ultraplast data and not verified.
-     * Replace them with measured values for your belts and products (docs/VERIFICATION_CHECKLIST.md).
-     *   mu              coefficient of friction between product and belt surface, per belt type (dry)
-     *   wetFactor/oilyFactor   multiply mu when the "wet" / "oily" condition is ticked
-     *   cogRatio        height of the product centre of gravity as a fraction of product height
-     *   stopTimeS       time the belt takes to stop (used by the "Stop belt" test)
-     *   marginRatio     speed / critical speed above which the check says "close to the limit"
-     */
-    behaviour: {
-      verified: false,
-      note: 'Generic textbook-range friction values for illustration. Verify with real belt and product tests.',
-      mu: { pp: 0.30, slat: 0.22, ss: 0.25, pu: 0.50, other: 0.30 },
-      muLabels: { pp: 'PP modular belt', slat: 'Thermoplastic slat chain', ss: 'Stainless steel slat / chain', pu: 'PU / PVC food belt', other: 'Other / not specified' },
-      wetFactor: 0.6, oilyFactor: 0.4, cogRatio: 0.5, stopTimeS: 0.5, marginRatio: 0.8
-    },
-
-    beltColours: [
-      ['#2f6fb5', 'Blue'], ['#f2f2f0', 'White'], ['#8a9099', 'Grey'], ['#25282c', 'Black'], ['#3f8f55', 'Green'], ['#d8cfae', 'Natural'], ['#b9bfc6', 'Stainless steel'], ['#8b5a2b', 'Brown']
-    ],
-    productColours: [
-      ['#c8102e', 'Red'], ['#2f6fb5', 'Blue'], ['#3f8f55', 'Green'], ['#f0c419', 'Yellow'], ['#ef8a17', 'Orange'], ['#f2f2f0', 'White'], ['#25282c', 'Black'], ['#b98a54', 'Cardboard brown'], ['#9fd3e6', 'Glass / clear blue']
-    ],
-
-    /*
      * Items that need data from Ultraplast engineering. Set a number to let the app
      * compute the matching quantity; leave null to keep it "to be engineered".
      */

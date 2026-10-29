@@ -31,8 +31,7 @@
         var lo = 0, hi = cum.length - 1;
         while (hi - lo > 1) { var m = (lo + hi) >> 1; if (cum[m] <= s) lo = m; else hi = m; }
         var a = points[lo], b = points[hi], seg = cum[hi] - cum[lo], t = seg > 0 ? (s - cum[lo]) / seg : 0;
-        var dx = b.x - a.x, dy = b.y - a.y, dz = (b.z || 0) - (a.z || 0), dl = Math.sqrt(dx * dx + dy * dy + dz * dz) || 1;
-        return { x: a.x + dx * t, y: a.y + dy * t, z: (a.z || 0) + dz * t, angle: Math.atan2(dy, dx), tx: dx / dl, ty: dy / dl, tz: dz / dl };
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: (a.z || 0) + ((b.z || 0) - (a.z || 0)) * t, angle: Math.atan2(b.y - a.y, b.x - a.x) };
       }
     };
   }

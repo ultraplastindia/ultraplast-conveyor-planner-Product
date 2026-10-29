@@ -26,12 +26,6 @@ Nothing below has been verified by Ultraplast. Values were read from public web 
 - [ ] Temperature, chemical and food-contact ratings per material
 - [ ] Motor, gearbox, torque, belt tension, shaft, bearing and structure sizing methods (the app deliberately does none)
 
-## 3D view (conveyor3d.js)
-- [ ] Confirm which parts may be drawn as generic shapes: side frame (section and depth), guide rails, support legs, end rollers, motor position and size - all are indicative constants in `IND` at the top of `conveyor3d.js`
-- [ ] Provide real drawing data if the 3D should match a catalogue model (frame width allowance per side, leg spacing, drive position, roller diameter, belt thickness)
-- [ ] Decide the standard obstacle height to show (obstacle height is not asked in the form; 1.0 m is drawn)
-- [ ] Inclines are drawn as straight ramps with sharp changes of slope; real conveyors use bend radii / transitions (not specified yet)
-
 ## Recommendation rules (calculations.js -> `recommend()`)
 - [ ] Review each rule: bottles/beverage -> slat chain; food + soft -> PU/PVC; rigid cartons dry -> powered roller; curves -> side-flex; etc.
 - [ ] Review which categories truly support curves / inclines (`supportsCurves`, `supportsIncline` in products.js)
@@ -46,12 +40,3 @@ Nothing below has been verified by Ultraplast. Values were read from public web 
 ## Legal / data
 - [ ] Privacy notice and consent wording approved (India DPDP Act etc.); enquiry service data location acceptable
 - [ ] Disclaimer wording approved by management
-
-
-## Added: colours, behaviour, CAD drawings (manual checks still needed)
-- [ ] Friction values and centre-of-gravity ratio in `products.js` -> `behaviour` replaced with values measured/approved by Ultraplast, then `verified:true`.
-- [ ] Open the downloaded 2D and 3D DXF in AutoCAD / DraftSight / LibreCAD: units mm, layers present, dimensions legible, 3D faces solid.
-- [ ] Compare drawing dimensions with a real order (belt width, radius, rise, heights).
-- [ ] Open the SVG sheet in Chrome and print to PDF at A3 / A4 (check scale text).
-- [ ] Check on a real phone: behaviour panel, speed box, drawing card scrolls sideways.
-- [ ] Confirm the frame / guide / leg / motor indicative sizes (`IND` in conveyor3d.js) with engineering, or keep them labelled indicative.

@@ -20,11 +20,6 @@ examples.forEach(function (f) {
     ok(s.slice(0, 5) === '%PDF-', 'header'); ok(/%%EOF$/.test(s), 'EOF'); ok(pdf.length > 3000, 'size');
   });
 });
-test('PDF carries the dimension schedule (curve radius, sweep, heights)', function () {
-  var b = build('u-shaped-multi-segment.json'), m = R.buildReportModel(b.raw, b.inp, b.res, P), sec = m.sections.filter(function (x) { return /Dimension schedule/.test(x.title); })[0];
-  ok(sec && sec.table.rows.length === 5, 'five segments'); ok(/Radius \d+ mm, sweep 90/.test(sec.table.rows[1][3]), sec.table.rows[1][3]);
-  var s = latin(R.renderPdf(m)); ok(/Dimension schedule/.test(s));
-});
 test('PDF xref offsets point at the right objects', function () {
   var b = build('u-shaped-multi-segment.json'), s = latin(R.renderPdf(R.buildReportModel(b.raw, b.inp, b.res, P)));
   var xs = parseInt(/startxref\n(\d+)/.exec(s)[1], 10); eq(s.substr(xs, 4), 'xref');
@@ -90,7 +85,7 @@ atest('request carries JSON body, omits credentials, no secrets in config.js', f
   });
 });
 test('enquiry.js / app code never touches localStorage with customer data', function () {
-  ['enquiry.js', 'report.js', 'calculations.js', 'app.js'].forEach(function (f) { var p = path.join(__dirname, '..', f); if (fs.existsSync(p)) ok(!/localStorage\.setItem\((?!COST_KEY,)/.test(fs.readFileSync(p, 'utf8')), f + ' (only the optional staff rate card, COST_KEY, may be stored)'); });
+  ['enquiry.js', 'report.js', 'calculations.js', 'app.js'].forEach(function (f) { var p = path.join(__dirname, '..', f); if (fs.existsSync(p)) ok(!/localStorage\.setItem/.test(fs.readFileSync(p, 'utf8')), f); });
 });
 
 Promise.all(async).then(function () {

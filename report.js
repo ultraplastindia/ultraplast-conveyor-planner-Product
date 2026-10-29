@@ -72,16 +72,6 @@
       ['Route footprint check', res.fit.detail ? (res.fit.status === 'fits' ? 'Fits: ' : 'DOES NOT FIT: ') + res.fit.detail : '-', res.fit.detail ? S.CALC : '-']
     ] });
 
-    if (res.path && res.path.details && res.path.details.length) {
-      var inl = typeof inp.inletHeight === 'number' && isFinite(inp.inletHeight) ? inp.inletHeight : null, pts = res.path.points;
-      var hz = function (i) { return inl === null ? '-' : Math.round(inl + (pts[i].z || 0) * 1000) + ' mm'; };
-      sections.push({ title: 'Dimension schedule (as drawn in the 3D view)', table: { head: ['No.', 'Type', 'Length', 'Details', 'Height start / end'], widths: [0.07, 0.17, 0.14, 0.4, 0.22], rows: res.path.details.map(function (d, i) {
-        var kind = d.type === 'straight' ? 'Straight' : d.type === 'curve' ? 'Curve ' + (d.direction === 'right' ? 'right' : 'left') : (d.rise < 0 ? 'Decline' : 'Incline');
-        var det = d.type === 'curve' ? 'Radius ' + Math.round(d.radius * 1000) + ' mm, sweep ' + (Math.round(d.angle * 10) / 10) + ' deg' : d.type === 'incline' ? 'Run ' + n(d.horizontal, 3) + ' m, rise ' + Math.round(d.rise * 1000) + ' mm, slope ' + (Math.round(Math.abs(d.angle) * 10) / 10) + ' deg' : 'Run ' + n(d.horizontal, 3) + ' m';
-        return ['S' + (i + 1), kind, n(d.length, 3) + ' m', det, hz(d.p0) + ' / ' + hz(d.p1)];
-      }) } });
-    }
-
     var t = res.throughput;
     sections.push({ title: 'Product and throughput', rows: [
       ['Product', (raw.productName || '-') + ' (' + val(inp.prodLength, 'mm', 0) + ' x ' + val(inp.prodWidth, 'mm', 0) + ' x ' + val(inp.prodHeight, 'mm', 0) + ', ' + val(inp.weight, 'kg', 3) + ')', S.CUSTOMER],

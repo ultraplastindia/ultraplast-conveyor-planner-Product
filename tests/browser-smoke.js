@@ -15,7 +15,6 @@ var fails = 0; function check(n, c, extra) { console.log((c ? '  PASS  ' : '  FA
     await page.goto(url); await page.waitForSelector('#stepBody input'); return { ctx: ctx, page: page, errors: errors, tag: tag };
   }
   async function fill(page, vals) { for (var k in vals) { var el = await page.$('#f_' + k); if (!el) throw new Error('no field ' + k); var tn = await el.evaluate(function (e) { return e.tagName; }); if (tn === 'SELECT') await el.selectOption(vals[k]); else await el.fill(String(vals[k])); } }
-  async function sig(page, sel) { return page.evaluate(function (s) { var c = document.querySelector(s); var x = c.getContext('2d'), d = x.getImageData(0, 0, c.width, c.height).data, h = 0, n = 0; for (var i = 0; i < d.length; i += 4 * 7) { h = (h * 31 + d[i] + d[i + 1] * 3 + d[i + 2] * 7) | 0; if (d[i] !== d[0] || d[i + 1] !== d[1]) n++; } return { hash: h, nonBlank: n }; }, sel); }
 
   /* ---- desktop: validation gate, full wizard, results, downloads, enquiry */
   var d = await session(1280, 900, 'desktop'), p = d.page;
@@ -24,12 +23,12 @@ var fails = 0; function check(n, c, extra) { console.log((c ? '  PASS  ' : '  FA
   await fill(p, { projectName: 'Smoke test', floorLength: '-5', floorWidth: 'abc' }); await p.click('#btnNext');
   check('negative / text input rejected with message', /greater than zero|must be a number/.test(await p.textContent('#errSummary')));
   await fill(p, { floorLength: '20', floorWidth: '6', industry: 'beverages' });
-  await p.waitForTimeout(300); check('live 3D preview draws the floor (canvas has content)', (await p.$$('#liveSchem canvas')).length === 1 && (await sig(p, '#liveSchem canvas')).nonBlank > 200);
+  await p.waitForTimeout(300); check('live schematic draws floor', (await p.$$('#liveSchem svg .sc-floor')).length === 1);
   await p.click('#btnNext');
   await fill(p, { handling: 'bottles', prodLength: '100', prodWidth: '100', prodHeight: '250', weight: '500', gap: '50' }); await p.selectOption('[data-name=weightUnit]', 'g'); await p.click('#btnNext');
   await fill(p, { rate: '60', speed: '10', hoursPerDay: '16' }); await p.click('#btnNext');
   await fill(p, { routeLength: '12' }); await p.waitForTimeout(500);
-  check('step 4 live preview already shows the conveyor in 3D', (await p.$$('#liveSchem canvas')).length === 1 && (await sig(p, '#liveSchem canvas')).nonBlank > 2000);
+  check('step 4 live preview already shows the moving conveyor', (await p.$$('#liveSchem .cv-belt')).length === 1 && (await p.$$('#liveSchem .sim-prod')).length > 0);
   check('build checklist shows 5 of 5 complete', (await p.$$('#liveSchem .build li.on')).length === 5);
   await p.screenshot({ path: path.join(out, 'desktop-step4.png') });
   await p.click('#btnNext'); await p.waitForSelector('#resultsBody .hero');
@@ -39,34 +38,15 @@ var fails = 0; function check(n, c, extra) { console.log((c ? '  PASS  ' : '  FA
   check('motor / tension flagged for engineering review', /Motor power and drive selection/.test(txt) && /Engineering review required/.test(txt));
   check('no price values shown', !/₹|\$\s?\d|INR\s?\d/.test(txt));
   check('WhatsApp button disabled (number unverified)', await p.isDisabled('#btnWa'));
-  check('3D card present with a canvas drawn', (await p.$$('#v3dHost canvas')).length === 1 && (await sig(p, '#v3dHost canvas')).nonBlank > 2000);
-  var t0 = await p.textContent('#v3dHost [data-o=time]'); await p.waitForTimeout(1200); var t1 = await p.textContent('#v3dHost [data-o=time]');
-  check('3D simulation is running (time advances: ' + t0 + ' -> ' + t1 + ')', t0 !== t1);
-  check('3D view shows entered belt speed 10.00 m/min', /10\.00 m\/min/.test(await p.textContent('#v3dHost')));
-  check('3D dimensions list belt, floor and rows are present in the schedule', /Dimension schedule/.test(await p.textContent('#resultsBody')) && /S1/.test(await p.textContent('#schedCard')));
-  await p.click('#v3dHost [data-a=play]'); var pa1 = await p.textContent('#v3dHost [data-o=time]'); await p.waitForTimeout(500); check('Pause stops the 3D simulation', pa1 === await p.textContent('#v3dHost [data-o=time]'));
-  var s0 = await sig(p, '#v3dHost canvas'); var box = await (await p.$('#v3dHost canvas')).boundingBox();
-  await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.mouse.down(); await p.mouse.move(box.x + box.width / 2 + 160, box.y + box.height / 2 - 60, { steps: 6 }); await p.mouse.up(); await p.waitForTimeout(150);
-  var s1 = await sig(p, '#v3dHost canvas'); check('dragging rotates the 3D model (picture changes)', s0.hash !== s1.hash);
-  await p.click('#v3dHost [data-v=top]'); await p.waitForTimeout(150); var s2 = await sig(p, '#v3dHost canvas'); check('Top view button changes the view', s2.hash !== s1.hash);
-  await p.click('#v3dHost [data-v=front]'); await p.waitForTimeout(150); var s3 = await sig(p, '#v3dHost canvas'); check('Front view differs from Top view', s3.hash !== s2.hash);
-  await p.click('#v3dHost [data-t=dims]'); await p.waitForTimeout(150); var s4 = await sig(p, '#v3dHost canvas'); check('Dimensions toggle redraws the picture', s4.hash !== s3.hash); await p.click('#v3dHost [data-t=dims]');
-  box = await (await p.$('#v3dHost canvas')).boundingBox(); await p.mouse.move(box.x + box.width / 2, box.y + box.height / 2); await p.mouse.wheel(0, -400); await p.waitForTimeout(150); var s5 = await sig(p, '#v3dHost canvas'); check('mouse wheel zooms', s5.hash !== s3.hash);
-  await p.click('#v3dHost [data-a=play]');
-  await p.click('[data-tab="plan"]'); await p.waitForTimeout(500);
-  check('2D plan tab shows the plan with products', (await p.$$('#simHost .sim-prod')).length > 0 && (await p.$$('#simHost .cv-belt')).length === 1 && (await p.$$('#simHost .cv-roller')).length === 2 && await p.isVisible('#simHost'));
+  check('simulation card present with products drawn', (await p.$$('#simHost .sim-prod')).length > 0);
+  var t0 = await p.textContent('[data-o=time]'); await p.waitForTimeout(1200); var t1 = await p.textContent('[data-o=time]');
+  check('simulation is running (time advances: ' + t0 + ' -> ' + t1 + ')', t0 !== t1);
   var off0 = await p.evaluate(function () { return document.querySelector('#simHost .cv-lines').style.strokeDashoffset; }); await p.waitForTimeout(400);
   var off1 = await p.evaluate(function () { return document.querySelector('#simHost .cv-lines').style.strokeDashoffset; });
-  check('plan-view belt slats move (' + off0 + ' -> ' + off1 + ')', off0 !== off1);
-  await p.click('[data-tab="3d"]'); await p.waitForTimeout(200); check('switching back shows the 3D view', await p.isVisible('#v3dHost canvas') && !(await p.isVisible('#simHost')));
+  check('belt slats move (dashoffset ' + off0 + ' -> ' + off1 + ')', off0 !== off1 && (await p.$$('#simHost .cv-belt')).length === 1 && (await p.$$('#simHost .cv-roller')).length === 2);
+  check('simulation shows entered belt speed 10.00 m/min', /10\.00 m\/min/.test(await p.textContent('#simHost')));
+  await p.click('[data-sim=play]'); var pa1 = await p.textContent('[data-o=time]'); await p.waitForTimeout(500); check('Pause stops the simulation', pa1 === await p.textContent('[data-o=time]')); await p.click('[data-sim=play]');
   await p.screenshot({ path: path.join(out, 'desktop-results.png'), fullPage: true });
-  check('CAD card shows a drawing sheet with 4 views and a title block', (await p.$$('#cadCard .cadsheet svg')).length === 1 && /PLAN VIEW/.test(await p.textContent('#cadCard')) && /SIDE ELEVATION/.test(await p.textContent('#cadCard')) && /END VIEW/.test(await p.textContent('#cadCard')) && /INDICATIVE drawing/.test(await p.textContent('#cadCard')));
-  var cdl = await Promise.all([p.waitForEvent('download'), p.click('#cadDxf2')]), c2 = fs.readFileSync(await cdl[0].path(), 'utf8');
-  check('2D DXF downloads (AC1009, ENTITIES, EOF, 12000 mm dimension)', /\.dxf$/.test(cdl[0].suggestedFilename()) && /AC1009/.test(c2) && /ENTITIES/.test(c2) && /EOF\s*$/.test(c2) && /12000 mm/.test(c2));
-  cdl = await Promise.all([p.waitForEvent('download'), p.click('#cadDxf3')]); var c3 = fs.readFileSync(await cdl[0].path(), 'utf8');
-  check('3D DXF downloads with 3DFACE solids', /3DFACE/.test(c3) && /BELT3D/.test(c3) && /EOF\s*$/.test(c3));
-  cdl = await Promise.all([p.waitForEvent('download'), p.click('#cadSvg')]); var cs = fs.readFileSync(await cdl[0].path(), 'utf8');
-  check('SVG drawing sheet downloads', /^<svg/.test(cs) && /\.svg$/.test(cdl[0].suggestedFilename()));
   var dl = await Promise.all([p.waitForEvent('download'), p.click('#btnPdf')]); var pp = await dl[0].path(); var head = fs.readFileSync(pp).slice(0, 5).toString('latin1');
   check('PDF downloaded in browser and is a PDF', head === '%PDF-' && /\.pdf$/.test(dl[0].suggestedFilename()), head);
   dl = await Promise.all([p.waitForEvent('download'), p.click('#btnJson')]); var js = JSON.parse(fs.readFileSync(await dl[0].path(), 'utf8'));
