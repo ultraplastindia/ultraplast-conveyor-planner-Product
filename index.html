@@ -23,6 +23,9 @@
         </fieldset>
         <label class="chk sm"><input type="checkbox" id="advToggle"> <span>Advanced</span></label>
         <label class="btn ghost sm" id="importWrap" title="Load a project JSON you downloaded earlier">Load JSON<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+        <a class="btn ghost sm" href="catalogue.html" id="lnkCat" title="Browse the Ultraplast product catalogue and get part suggestions">Catalogue</a>
+        <button type="button" class="btn gold sm" id="btnCosting" title="Cost estimate for staff and approved partners (needs one-time approval)">Costing</button>
+        <button type="button" class="btn sm" id="btnBom" title="Open the BOM and motor sheet for this project">BOM &amp; Motor &rarr;</button>
         <button type="button" class="btn ghost sm" id="btnReset">Reset</button>
       </div>
     </div>
@@ -39,12 +42,15 @@
 
       <div id="wizardWrap" class="layout">
         <form id="wizard" novalidate class="panel" autocomplete="off">
+          <p class="stepcount" id="stepCount"></p>
           <h2 id="stepTitle"></h2>
           <p id="stepIntro" class="intro"></p>
+          <p id="stepNeed" class="need-line"></p>
           <div id="errSummary" class="banner bad" role="alert" hidden></div>
           <div id="stepBody"></div>
           <div class="nav">
             <button type="button" class="btn" id="btnBack" hidden>&larr; Back</button>
+            <button type="button" class="btn ghost" id="btnSkip" hidden>Skip this step &rarr;</button>
             <button type="submit" class="btn primary" id="btnNext">Next &rarr;</button>
           </div>
         </form>
@@ -53,6 +59,7 @@
             <h3>Live preview</h3>
             <div id="liveSchem"></div>
             <div id="liveStats" class="stats"></div>
+            <div id="liveSuggest" class="suggest"></div>
             <p class="note">Preliminary estimate. Dimensions in black are entered by you; red is calculated or proposed.</p>
           </div>
         </aside>
@@ -72,16 +79,25 @@
     <div class="wrap">
       <p><b>Important:</b> This tool gives preliminary, indicative results from the information you enter. It is not an engineering design, product approval or quotation, and does not include prices. Final selection of belts, chains, drives, structure and safety measures is made by Ultraplast engineers after detailed review.</p>
       <p>&copy; Ultraplast Chainbelts Private Limited &middot; <a href="https://www.ultraplastindia.com/" target="_blank" rel="noopener">ultraplastindia.com</a> &middot; Your inputs stay in this browser tab and are not saved.</p>
+      <p id="contactLine" class="src"></p>
+      <p id="dataSource" class="src"></p>
     </div>
   </footer>
 
   <script src="config.js"></script>
   <script src="products.js"></script>
+  <script src="sheetconfig.js"></script>
   <script src="calculations.js"></script>
+  <script src="costing.js"></script>
+  <script src="access.js"></script>
   <script src="report.js"></script>
   <script src="enquiry.js"></script>
   <script src="schematic.js"></script>
   <script src="simulation.js"></script>
+  <script src="physics.js"></script>
+  <script src="conveyor3d.js"></script>
+<script src="cad.js"></script>
+  <script src="catalogue.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

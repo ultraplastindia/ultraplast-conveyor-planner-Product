@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Product Catalogue - Ultraplast Smart Conveyor Planner</title>
+  <meta name="description" content="Browse the Ultraplast product range (modular belts, slat chains, sprockets, corner tracks, components) and get a part recommendation for your conveyor.">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top"><div class="wrap bar">
+    <a class="brand" href="index.html"><span><b>ULTRA</b>PLAST</span></a>
+    <div class="titles"><h1>Product catalogue &amp; part recommender</h1><p>From the Ultraplast Product Range catalogue &middot; preliminary &middot; not a quotation</p></div>
+    <div class="tools">
+      <a class="btn ghost sm" href="index.html">&larr; Conveyor planner</a>
+      <a class="btn ghost sm" href="bom.html">BOM &amp; Motor</a>
+      <a class="btn gold sm" href="index.html?openCosting=1" title="Cost estimate for staff and approved partners (needs one-time approval)">Costing</a>
+    </div>
+  </div></header>
+  <main class="wrap" id="main">
+    <section class="card" id="recoCard">
+      <h2>Which parts do I need? <small>(recommendation)</small></h2>
+      <p class="intro">Answer what you know. Everything is optional. The suggestions come only from what is printed in the Ultraplast catalogue; sizes and quantities are confirmed by Ultraplast engineering.</p>
+      <form id="recoForm" class="grid2" autocomplete="off"></form>
+      <div id="recoOut"></div>
+    </section>
+    <section class="card">
+      <h2>Browse the catalogue</h2>
+      <div class="cadbtns"><input type="search" id="q" placeholder="Search part number or word (e.g. ULF 820, sprocket, 90 deg, bottle)" aria-label="Search the catalogue" style="flex:1;min-width:220px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;font:inherit"></div>
+      <div id="tabs" class="cadbtns" role="tablist"></div>
+      <div id="browse"></div>
+    </section>
+    <p class="note" id="srcNote"></p>
+  </main>
+  <footer class="foot"><div class="wrap"><p><b>Important:</b> Data transcribed from the Ultraplast catalogue. Preliminary, no prices, not a quotation. Ultraplast engineering confirms the selection before any order.</p><p id="contactLine" class="src"></p></div></footer>
+  <script src="config.js"></script>
+  <script src="products.js"></script>
+  <script src="catalogue.js"></script>
+  <script src="catalogue-ui.js"></script>
+</body>
+</html>

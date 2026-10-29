@@ -86,3 +86,7 @@ If you later edit `Code.gs`: **Deploy -> Manage deployments -> pencil -> Version
 
 ## Not tested against real Google
 These steps were tested with simulated Google replies (automated tests in `tests/sheets.test.js` and `tests/browser-sheet.js`), not against your live Google account. Do one real end-to-end test after setup.
+
+
+## Costing access tab
+The same script also keeps a **CostingAccess** tab (created automatically on the first request). Set a row's Status to Approved or Revoked to control who may open Costing. See docs/COSTING.md. After pasting the new `Code.gs`, re-deploy as a new version.

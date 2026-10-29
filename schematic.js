@@ -16,16 +16,21 @@
    */
   function render(opts) {
     var W = 640, pad = 46, fmt = opts.fmt || function (m) { return f(m) + ' m'; };
-    if (!ok(opts.floorL) || !ok(opts.floorW)) {
-      return '<svg viewBox="0 0 640 200" role="img" aria-label="Schematic placeholder" class="sc"><rect x="1" y="1" width="638" height="198" class="sc-empty"/><text x="320" y="105" text-anchor="middle" class="sc-text">Enter the floor length and width to see the schematic</text></svg>';
+    var hasFloor = ok(opts.floorL) && ok(opts.floorW), hasPath = !!(opts.path && opts.path.points && opts.path.points.length > 1), x0 = 0, y0 = 0, fl, fw;
+    if (!hasFloor && !hasPath) {
+      return '<svg viewBox="0 0 640 200" role="img" aria-label="Schematic placeholder" class="sc"><rect x="1" y="1" width="638" height="198" class="sc-empty"/><text x="320" y="105" text-anchor="middle" class="sc-text">Enter the conveyor length (or the floor size) to see the schematic</text></svg>';
     }
-    var fl = opts.floorL, fw = opts.floorW;
+    if (hasFloor) { fl = opts.floorL; fw = opts.floorW; }
+    else {   // no floor given: frame the conveyor on its own (with a margin); no floor outline or floor dimensions are drawn
+      var bb0 = opts.path.bbox, bwid = Math.max(bb0.maxX - bb0.minX, 0.2), bhei = Math.max(bb0.maxY - bb0.minY, 0.2), mg = Math.max(bwid, bhei) * 0.12 + 0.3;
+      x0 = bb0.minX - mg; y0 = bb0.minY - mg; fl = bwid + 2 * mg; fw = bhei + 2 * mg;
+    }
     var s = Math.min((W - 2 * pad) / fl, 340 / fw), fx = (W - fl * s) / 2, fy = pad - 8, pw = fl * s, ph = fw * s, H = ph + pad + 52;
-    var X = function (x) { return fx + x * s; }, Y = function (y) { return fy + ph - y * s; };
+    var X = function (x) { return fx + (x - x0) * s; }, Y = function (y) { return fy + ph - (y - y0) * s; };
     var o = [];
-    o.push('<svg viewBox="0 0 ' + W + ' ' + f(H) + '" data-s="' + s + '" data-fx="' + f(fx) + '" data-fy="' + f(fy) + '" data-ph="' + f(ph) + '" role="img" aria-label="Plan view schematic of the available floor and proposed conveyor route" class="sc" xmlns="http://www.w3.org/2000/svg">');
+    o.push('<svg viewBox="0 0 ' + W + ' ' + f(H) + '" data-s="' + s + '" data-fx="' + f(fx - x0 * s) + '" data-fy="' + f(fy) + '" data-ph="' + f(ph + y0 * s) + '" role="img" aria-label="Plan view schematic of the' + (hasFloor ? ' available floor and' : '') + ' proposed conveyor route" class="sc" xmlns="http://www.w3.org/2000/svg">');
     o.push('<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" class="sc-hatch"/></pattern></defs>');
-    o.push('<rect x="' + f(fx) + '" y="' + f(fy) + '" width="' + f(pw) + '" height="' + f(ph) + '" class="sc-floor"/>');
+    if (hasFloor) o.push('<rect x="' + f(fx) + '" y="' + f(fy) + '" width="' + f(pw) + '" height="' + f(ph) + '" class="sc-floor"/>');
     (opts.obstacles || []).forEach(function (b, i) {
       if (!ok(b.w) || !ok(b.d) || b.x === null || b.y === null || isNaN(b.x) || isNaN(b.y)) return;
       o.push('<rect x="' + f(X(b.x)) + '" y="' + f(Y(b.y + b.d)) + '" width="' + f(b.w * s) + '" height="' + f(b.d * s) + '" class="sc-obst"/>');
@@ -58,16 +63,21 @@
       o.push('<text x="' + f(X(z.x) + 8) + '" y="' + f(Y(z.y) - 8) + '" class="sc-text sc-small sc-halo">OUT (est.)</text>');
       if (!p.complete) o.push('<text x="' + f(fx + 6) + '" y="' + f(fy + ph - 8) + '" class="sc-text sc-warn">Route incomplete - segment data missing</text>');
       // route footprint label (calculated)
-      o.push('<text x="' + f(X(bb.minX)) + '" y="' + f(Y(bb.maxY) - 4) + '" class="sc-text sc-small sc-est">Route footprint ' + fmt(bb.maxX - bb.minX) + ' x ' + fmt(bb.maxY - bb.minY) + ' (calculated)</text>');
+      o.push('<text x="' + f(X(bb.minX)) + '" y="' + f(Y(bb.maxY) - 4) + '" class="sc-text sc-small sc-est">' + (hasFloor || bb.maxY - bb.minY > 0.01 ? 'Route footprint ' + fmt(bb.maxX - bb.minX) + ' x ' + fmt(bb.maxY - bb.minY) + ' (calculated)' : '') + '</text>');
     }
+    if (hasFloor) {
     var by = fy + ph + 18;
-    o.push('<line x1="' + f(fx) + '" y1="' + f(by) + '" x2="' + f(fx + pw) + '" y2="' + f(by) + '" class="sc-dim"/>');
-    o.push('<line x1="' + f(fx) + '" y1="' + f(by - 5) + '" x2="' + f(fx) + '" y2="' + f(by + 5) + '" class="sc-dim"/><line x1="' + f(fx + pw) + '" y1="' + f(by - 5) + '" x2="' + f(fx + pw) + '" y2="' + f(by + 5) + '" class="sc-dim"/>');
-    o.push('<text x="' + f(fx + pw / 2) + '" y="' + f(by + 16) + '" text-anchor="middle" class="sc-text">Floor length ' + esc(fmt(fl)) + ' (entered)</text>');
-    var rx = fx + pw + 18;
-    o.push('<line x1="' + f(rx) + '" y1="' + f(fy) + '" x2="' + f(rx) + '" y2="' + f(fy + ph) + '" class="sc-dim"/>');
-    o.push('<line x1="' + f(rx - 5) + '" y1="' + f(fy) + '" x2="' + f(rx + 5) + '" y2="' + f(fy) + '" class="sc-dim"/><line x1="' + f(rx - 5) + '" y1="' + f(fy + ph) + '" x2="' + f(rx + 5) + '" y2="' + f(fy + ph) + '" class="sc-dim"/>');
-    o.push('<text transform="translate(' + f(rx + 14) + ' ' + f(fy + ph / 2) + ') rotate(90)" text-anchor="middle" class="sc-text">Floor width ' + esc(fmt(fw)) + ' (entered)</text>');
+      o.push('<line x1="' + f(fx) + '" y1="' + f(by) + '" x2="' + f(fx + pw) + '" y2="' + f(by) + '" class="sc-dim"/>');
+      o.push('<line x1="' + f(fx) + '" y1="' + f(by - 5) + '" x2="' + f(fx) + '" y2="' + f(by + 5) + '" class="sc-dim"/><line x1="' + f(fx + pw) + '" y1="' + f(by - 5) + '" x2="' + f(fx + pw) + '" y2="' + f(by + 5) + '" class="sc-dim"/>');
+      o.push('<text x="' + f(fx + pw / 2) + '" y="' + f(by + 16) + '" text-anchor="middle" class="sc-text">Floor length ' + esc(fmt(fl)) + ' (entered)</text>');
+      var rx = fx + pw + 18;
+      o.push('<line x1="' + f(rx) + '" y1="' + f(fy) + '" x2="' + f(rx) + '" y2="' + f(fy + ph) + '" class="sc-dim"/>');
+      o.push('<line x1="' + f(rx - 5) + '" y1="' + f(fy) + '" x2="' + f(rx + 5) + '" y2="' + f(fy) + '" class="sc-dim"/><line x1="' + f(rx - 5) + '" y1="' + f(fy + ph) + '" x2="' + f(rx + 5) + '" y2="' + f(fy + ph) + '" class="sc-dim"/>');
+      o.push('<text transform="translate(' + f(rx + 14) + ' ' + f(fy + ph / 2) + ') rotate(90)" text-anchor="middle" class="sc-text">Floor width ' + esc(fmt(fw)) + ' (entered)</text>');
+    } else if (hasPath) {
+      var pbb = opts.path.bbox, by2 = Y(pbb.minY) + 22, bw2 = pbb.maxX - pbb.minX, bh2 = pbb.maxY - pbb.minY;
+      o.push('<text x="' + f(fx + pw / 2) + '" y="' + f(fy + ph + 34) + '" text-anchor="middle" class="sc-text">No floor size given - conveyor shown on its own. Overall ' + (bh2 < 0.01 || bw2 < 0.01 ? 'length ' + esc(fmt(Math.max(bw2, bh2))) : 'plan ' + esc(fmt(bw2)) + ' x ' + esc(fmt(bh2))) + ' (centre-line, calculated)</text>');
+    }
     o.push('</svg>');
     return o.join('');
   }

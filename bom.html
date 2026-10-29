@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BOM and Motor Sheet - Ultraplast Smart Conveyor Planner</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top"><div class="wrap bar">
+    <a class="brand" href="index.html"><span><b>ULTRA</b>PLAST</span></a>
+    <div class="titles"><h1>BOM &amp; Motor sheet</h1><p>Preliminary &middot; not a quotation &middot; not for manufacture</p></div>
+    <div class="tools">
+      <a class="btn ghost sm" href="index.html" id="back">&larr; Back to planner</a>
+      <a class="btn ghost sm" href="catalogue.html">Catalogue</a>
+      <a class="btn gold sm" href="index.html?openCosting=1" title="Cost estimate for staff and approved partners (needs one-time approval)">Costing</a>
+      <label class="btn ghost sm">Load JSON<input type="file" id="importFile" accept="application/json,.json" hidden></label>
+      <button type="button" class="btn sm" id="print">Print / Save as PDF</button>
+    </div>
+  </div></header>
+  <main class="wrap" id="main"><div id="out"></div></main>
+  <script src="config.js"></script>
+  <script src="products.js"></script>
+  <script src="sheetconfig.js"></script>
+  <script src="calculations.js"></script>
+  <script src="catalogue.js"></script>
+  <script src="bom.js"></script>
+</body>
+</html>

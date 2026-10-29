@@ -214,12 +214,9 @@
 
   /** Required fields to leave a step (UI gate). Returns [{field,msg}] */
   function requiredForStep(step, inp) {
-    var req = {
-      1: [['floorLength', 'Enter the available floor length.'], ['floorWidth', 'Enter the available floor width.']],
-      2: [['prodLength', 'Enter the product length (mm).'], ['prodWidth', 'Enter the product width (mm).'], ['prodHeight', 'Enter the product height (mm).'], ['weight', 'Enter the product weight.']],
-      3: [['rate', 'Enter the required throughput.']],
-      4: []
-    }[step] || [];
+    // Only the conveyor route length (straight layout) is a hard requirement. Floor size, product and throughput are optional:
+    // anything missing is listed under "Missing engineering inputs" and flagged for engineering review - nothing is invented.
+    var req = { 1: [], 2: [], 3: [], 4: (inp.layout === 'straight' || !inp.layout) ? [['routeLength', 'Enter the conveyor length (centre-line of the straight run).']] : [] }[step] || [];
     var out = [];
     req.forEach(function (r) { if (inp[r[0]] === null || inp[r[0]] === undefined) out.push({ field: r[0], msg: r[1] }); });
     if (step === 1 && !inp.layout) out.push({ field: 'layout', msg: 'Choose a layout.' });
@@ -391,7 +388,7 @@
     if (num(inp.floorLength) && num(inp.floorWidth) && inp.floorLength > 0 && inp.floorWidth > 0) {
       out.floor.area = round(inp.floorLength * inp.floorWidth, 3);
       out.floor.areaStatus = STATUS.CALC;
-    } else out.missing.push('Available floor length and width');
+    } else issue('info', 'Floor size was not given, so the conveyor is drawn on its own (no floor outline) and the fit on site is not checked. Add the floor length and width if you want the fit checked.');
 
     /* --- path --- */
     var segs = segmentsFromInputs(inp);
@@ -582,9 +579,9 @@
           var f = P.families[fid]; if (!f || !f.minSideFlexRadius) return;
           var m = f.minSideFlexRadius, lim = null;
           if (m.fixedMm) lim = m.fixedMm.value;
-          else if (m.factorOfWidth && num(inp.beltWidth)) lim = m.factorOfWidth.value * inp.beltWidth;
+          else if (m.factorOfWidth && num(inp.beltWidth)) lim = m.factorOfWidth.value * inp.beltWidth + (m.reference === 'inner' ? inp.beltWidth / 2 : 0); /* catalogue gives the INNERMOST radius; route radius is centre-line */
           if (lim !== null) {
-            var matches = (inp.material === 'ss304' && fid === 'ss_tab_flex') || (inp.material !== 'ss304' && fid === 'side_flex_plastic') || famIds.length === 1;
+            var matches = (inp.material === 'ss304' && fid === 'ss_tab_flex') || (inp.material === 'plastic_other' && fid === 'thermoplastic_tab_flex') || ((inp.material !== 'ss304' && inp.material !== 'plastic_other') && fid === 'side_flex_plastic') || famIds.length === 1;
             if (matches) { limit = lim; why = f.label; }
           }
         });
@@ -593,7 +590,7 @@
           var ok = rMm >= limit;
           out.radiusChecks.push({ segment: c.index + 1, radiusMm: round(rMm, 0), limitMm: round(limit, 0), ok: ok, family: why });
           if (!ok) issue('error', 'Segment ' + (c.index + 1) + ': curve radius ' + round(rMm, 0) + ' mm is below the published minimum side-flex radius (about ' + round(limit, 0) + ' mm) for ' + why + '. Increase the radius.');
-          else issue('info', 'Segment ' + (c.index + 1) + ': radius ' + round(rMm, 0) + ' mm vs published minimum about ' + round(limit, 0) + ' mm. The published figure does not say whether it is inside, centre or outside radius - verify.');
+          else issue('info', 'Segment ' + (c.index + 1) + ': radius ' + round(rMm, 0) + ' mm vs published minimum about ' + round(limit, 0) + ' mm. The catalogue gives the innermost turning radius for plastic belts (converted here to the centre-line radius); for chains the reference radius is not stated - verify.');
         } else {
           out.radiusChecks.push({ segment: c.index + 1, radiusMm: round(rMm, 0), limitMm: null, ok: null });
           issue('warning', 'Segment ' + (c.index + 1) + ': no verified minimum radius is configured for "' + sel.name + '" with the selected material/width - engineering review required.');

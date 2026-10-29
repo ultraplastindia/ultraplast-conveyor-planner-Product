@@ -62,7 +62,7 @@
     ], bullets: rec.reasons });
 
     sections.push({ title: 'Available space and route', rows: [
-      ['Floor length x width', val(res.floor.length, 'm') + ' x ' + val(res.floor.width, 'm'), S.CUSTOMER],
+      ['Floor length x width', res.floor.area === null ? 'Not given (optional) - conveyor shown on its own' : val(res.floor.length, 'm') + ' x ' + val(res.floor.width, 'm'), res.floor.area === null ? S.REVIEW : S.CUSTOMER],
       ['Floor area', val(res.floor.area, 'm2'), res.floor.area === null ? '-' : S.CALC],
       ['Layout', String(raw.layout || '-').toUpperCase(), S.CUSTOMER],
       ['Total conveyor path length', res.path ? val(res.path.total, 'm') + (res.path.complete ? '' : ' (partial)') : '-', res.path ? res.path.totalStatus : S.REVIEW],
@@ -71,6 +71,16 @@
       ['Inclined segments', res.path ? val(res.path.inclined, 'm') : '-', res.path ? S.CALC : '-'],
       ['Route footprint check', res.fit.detail ? (res.fit.status === 'fits' ? 'Fits: ' : 'DOES NOT FIT: ') + res.fit.detail : '-', res.fit.detail ? S.CALC : '-']
     ] });
+
+    if (res.path && res.path.details && res.path.details.length) {
+      var inl = typeof inp.inletHeight === 'number' && isFinite(inp.inletHeight) ? inp.inletHeight : null, pts = res.path.points;
+      var hz = function (i) { return inl === null ? '-' : Math.round(inl + (pts[i].z || 0) * 1000) + ' mm'; };
+      sections.push({ title: 'Dimension schedule (as drawn in the 3D view)', table: { head: ['No.', 'Type', 'Length', 'Details', 'Height start / end'], widths: [0.07, 0.17, 0.14, 0.4, 0.22], rows: res.path.details.map(function (d, i) {
+        var kind = d.type === 'straight' ? 'Straight' : d.type === 'curve' ? 'Curve ' + (d.direction === 'right' ? 'right' : 'left') : (d.rise < 0 ? 'Decline' : 'Incline');
+        var det = d.type === 'curve' ? 'Radius ' + Math.round(d.radius * 1000) + ' mm, sweep ' + (Math.round(d.angle * 10) / 10) + ' deg' : d.type === 'incline' ? 'Run ' + n(d.horizontal, 3) + ' m, rise ' + Math.round(d.rise * 1000) + ' mm, slope ' + (Math.round(Math.abs(d.angle) * 10) / 10) + ' deg' : 'Run ' + n(d.horizontal, 3) + ' m';
+        return ['S' + (i + 1), kind, n(d.length, 3) + ' m', det, hz(d.p0) + ' / ' + hz(d.p1)];
+      }) } });
+    }
 
     var t = res.throughput;
     sections.push({ title: 'Product and throughput', rows: [
@@ -102,7 +112,8 @@
     sections.push({ title: 'Next steps', bullets: res.nextSteps.concat(['Request a detailed quotation from Ultraplast: ' + P.company.enquiryEmail + ' | ' + P.company.phones.join(', ')]) });
 
     var schem = null;
-    if (res.floor.area !== null) schem = { floor: { l: res.floor.length, w: res.floor.width }, path: res.path ? res.path.points : [], placement: res.path ? res.path.placement : null, obstacles: (inp.obstacles || []).filter(function (o) { return o.x !== null && o.y !== null && o.w > 0 && o.d > 0; }) };
+    if (res.floor.area === null && res.path && res.path.points.length > 1) { var bb = res.path.bbox, mg = Math.max(bb.maxX - bb.minX, bb.maxY - bb.minY, 0.2) * 0.12 + 0.3; schem = { noFloor: true, x0: bb.minX - mg, y0: bb.minY - mg, floor: { l: bb.maxX - bb.minX + 2 * mg, w: bb.maxY - bb.minY + 2 * mg }, plan: { w: bb.maxX - bb.minX, h: bb.maxY - bb.minY }, path: res.path.points, placement: res.path.placement, obstacles: (inp.obstacles || []).filter(function (o) { return o.x !== null && o.y !== null && o.w > 0 && o.d > 0; }) }; }
+    else if (res.floor.area !== null) schem = { floor: { l: res.floor.length, w: res.floor.width }, path: res.path ? res.path.points : [], placement: res.path ? res.path.placement : null, obstacles: (inp.obstacles || []).filter(function (o) { return o.x !== null && o.y !== null && o.w > 0 && o.d > 0; }) };
     return { meta: meta, sections: sections, schematic: schem };
   }
 
@@ -227,14 +238,15 @@
     var top = pdf.y, pad = 22, aw = boxW - 2 * pad, ah = boxH - 2 * pad;
     var s = Math.min(aw / sc.floor.l, ah / sc.floor.w);
     var fx = pdf.M + pad, fy = top + pad, fw = sc.floor.l * s, fh = sc.floor.w * s;
-    var X = function (x) { return fx + x * s; }, Y = function (y) { return fy + fh - y * s; };
-    pdf.rect(fx, fy, fw, fh, [1, 1, 1], BLACK);
+    var x0 = sc.x0 || 0, y0 = sc.y0 || 0, X = function (x) { return fx + (x - x0) * s; }, Y = function (y) { return fy + fh - (y - y0) * s; };
+    if (!sc.noFloor) pdf.rect(fx, fy, fw, fh, [1, 1, 1], BLACK);
     sc.obstacles.forEach(function (o) { pdf.rect(X(o.x), Y(o.y + o.d), o.w * s, o.d * s, [0.8, 0.8, 0.8], GREY); });
     if (sc.path.length) pdf.poly(sc.path.map(function (p) { return [X(p.x), Y(p.y)]; }), RED, 2.2, sc.placement === 'auto' ? '5 3' : null);
-    pdf.text(fx, top + 12, 'Floor length ' + n(sc.floor.l, 2) + ' m (entered)', 8, false, BLACK);
-    pdf.text(fx + fw + 4 > pdf.W - pdf.M - 60 ? fx + fw - 90 : fx + fw + 4, fy + fh / 2, n(sc.floor.w, 2) + ' m', 8, false, BLACK);
+    if (sc.noFloor) pdf.text(fx, top + 12, 'No floor size given - conveyor drawn on its own. Overall ' + (sc.plan.h < 0.01 || sc.plan.w < 0.01 ? 'length ' + n(Math.max(sc.plan.w, sc.plan.h), 2) + ' m' : 'plan ' + n(sc.plan.w, 2) + ' m x ' + n(sc.plan.h, 2) + ' m') + ' (centre-line, calculated)', 8, false, BLACK);
+    else { pdf.text(fx, top + 12, 'Floor length ' + n(sc.floor.l, 2) + ' m (entered)', 8, false, BLACK);
+    pdf.text(fx + fw + 4 > pdf.W - pdf.M - 60 ? fx + fw - 90 : fx + fw + 4, fy + fh / 2, n(sc.floor.w, 2) + ' m', 8, false, BLACK); }
     pdf.y = top + boxH + 4;
-    pdf.para('Black outline = entered floor. Red line = proposed conveyor centre-line' + (sc.placement === 'auto' ? ' (dashed: position auto-placed, not confirmed)' : '') + '. Grey blocks = entered obstacles.', 8, { color: GREY });
+    pdf.para((sc.noFloor ? '' : 'Black outline = entered floor. ') + 'Red line = proposed conveyor centre-line' + (sc.placement === 'auto' ? ' (dashed: position auto-placed, not confirmed)' : '') + '. Grey blocks = entered obstacles.', 8, { color: GREY });
     pdf.y += 4;
   }
 

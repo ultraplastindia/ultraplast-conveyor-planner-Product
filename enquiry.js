@@ -41,7 +41,7 @@
       timer = setTimeout(function () { timedOut = true; if (ctl) ctl.abort(); resolve({ status: 'failed', message: 'The enquiry service did not respond in time. Your enquiry has NOT been sent. Please try again or use email.' }); }, cfg.timeoutMs || 15000);
     });
     var req = Promise.resolve().then(function () {
-      return f(cfg.endpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(payload), signal: ctl ? ctl.signal : undefined, credentials: 'omit', referrerPolicy: 'no-referrer' });
+      return f(cfg.endpoint, { method: 'POST', headers: { 'Content-Type': cfg.sendAs === 'text' ? 'text/plain;charset=utf-8' : 'application/json', 'Accept': 'application/json' }, body: JSON.stringify(payload), signal: ctl ? ctl.signal : undefined, credentials: 'omit', referrerPolicy: 'no-referrer' });
     }).then(function (resp) {
       if (!resp || !resp.ok) return { status: 'failed', message: 'The enquiry service returned an error' + (resp && resp.status ? ' (HTTP ' + resp.status + ')' : '') + '. Your enquiry has NOT been sent.' };
       if (cfg.successField) {

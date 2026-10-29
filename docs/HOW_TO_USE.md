@@ -55,7 +55,14 @@ The **Build progress** ticks show how far along you are:
 5. **Conveyor running** - everything is known; belt and products start moving
 
 ## 5. Reading the results page
-- **Your conveyor, running:** Play/Pause, Restart, playback speed, **Zoom to conveyor**. Counters show products on the belt and delivered.
+- **Your conveyor in 3D:** the finished conveyor, running at your speed and spacing.
+  - **Turn it:** drag with the mouse or one finger. **Zoom:** scroll wheel or pinch. **Move it:** Shift+drag, right-drag, or two fingers. Double-click refits.
+  - **Buttons:** Isometric, Top, Front, Back, Inlet end, Outlet end (front/back/ends follow the direction your conveyor runs), Fit conveyor, Whole floor, Orthographic (true-proportion flat views), Auto-rotate, Full screen, Save image (PNG).
+  - **Tick boxes:** Dimensions, Products, Frame/supports/drive, Floor and obstacles. Switch Dimensions off for a cleaner picture.
+  - **Colours of dimensions:** black = you entered it, red = calculated from your entries, grey = indicative (not yet specified by Ultraplast).
+  - **Red tags S1, S2...** are the route segments; the **Dimension schedule** table below the picture lists each one (length, radius, sweep, rise, heights).
+  - Play/Pause, Restart and playback speed run the products; counters show products on the belt and delivered.
+  - The tab **Plan view (2D) and side profile** keeps the flat drawing.
 - **Recommended conveyor type** and the reasons. You may choose a different type in Step 4; the tool will flag problems.
 - **Checks and flags:** red = problem to fix, yellow = check, grey = note.
 - **Space and route, Product and throughput, Belt/chain and width:** each value has a label:
@@ -92,3 +99,46 @@ Expected: path 12.00 m, conveyor running at 10.00 m/min, 150 mm spacing.
 - Edit product data only in `products.js`; settings in `config.js`.
 - Verify every value in `docs/VERIFICATION_CHECKLIST.md` before public launch.
 - Set the enquiry service URL in `config.js`; set the WhatsApp number only after it is confirmed.
+
+
+## Colours, product movement and falling products
+1. Step 2: choose a **Product colour**. Step 4: choose a **Belt colour** and (optional) the **friction μ** if you know it.
+2. On the results page, in the 3D model, raise the **belt speed** box above the "highest safe speed" shown - products start sliding/tipping off the curve and fall to the floor. Lower it again and they stay on.
+3. **Stop belt (test)** shows whether tall or slippery products slide or tip when the belt stops. The friction values are generic - confirm with Ultraplast engineering before relying on them.
+
+## Engineering drawing (AutoCAD)
+Results page -> **Engineering drawing (CAD)**: *Download 2D DXF*, *Download 3D DXF*, or the A3 *SVG sheet*. In AutoCAD use OPEN (or INSERT) on the .dxf file; units are millimetres.
+Turn layers on/off: DIM_ENTERED (black), DIM_CALC (red) and DIM_IND (grey) show where each dimension came from. Layers ending _IND are indicative drawing aids only.
+
+
+## Customer only knows the conveyor length
+Leave the floor, product and throughput steps blank (just press Next) and enter the **conveyor length** in step 4. You still get the 3D view, the drawing (2D / 3D DXF, SVG sheet), PDF and JSON.
+Anything not entered is shown as "not entered" and listed for engineering review - e.g. no floor outline, no fit-on-floor check, no product movement until a product size is entered. Add details later and press *Edit inputs* to refresh everything.
+
+
+## Filling the form - the easy way
+1. Press **Quick start** if you only know the conveyor length - type the length, press *Calculate results*.
+2. Otherwise go step by step. Tags show what each box needs: **Needed** (red), **Helpful** (green), **Optional** (grey). Don't know? Leave it blank or press **Skip this step**.
+3. The first card of the results, **In simple words**, explains the answer in plain language and lists what is still missing.
+
+## BOM & Motor button
+
+The **BOM & Motor →** button in the top bar opens `bom.html` for the current project. It shows the project inputs, what the engineer needs for the motor and drive, a BOM table and the planner's equipment checklist.
+
+- The tool **does not select a motor** and **does not invent parts or quantities**. Until Ultraplast adds verified data, the BOM and motor tables say "Engineering review required".
+- To fill them, an engineer edits the `bom` section of `products.js` (row format is described in the file's comment): `parts` (with qty rules per metre / per curve / per leg / fixed) and `motors` (reference list).
+- The project is passed to the page once through the browser tab (removed as soon as it is read). Reloading the page clears it; use **Load JSON** on that page to reopen a saved project. Nothing is stored.
+- **Print / Save as PDF** prints the sheet.
+
+## Product catalogue and part recommendations
+
+The **Catalogue** button (top bar) opens `catalogue.html`, built from the Ultraplast Product Range catalogue (46 pages): plastic modular belts (UMB 25 / 50 / 50HD, USF 25 / 50), thermoplastic and stainless steel slat chains, Multiflex chain, split sprockets, idler wheels, UHMWPE wearstrips and guides, corner tracks (tab and magnetic), return rollers, side brackets, clamps, tripod / bipod / leg pads, frame supports, handles and hinges.
+
+- **Which parts do I need?** Answer what you know (what you convey, straight or curve, product width, curve radius, lanes, temperature, wet, stainless). It suggests belt / chain families and the matching parts.
+- **Browse the catalogue:** tabs per product group, plus a search box (part number or word).
+- On the **results page** a "Catalogue parts for this project" card shows the same suggestions for your route, and the **BOM & Motor** sheet lists them as the preliminary BOM.
+- Matching follows the catalogue's own "Application" lines (for example series 812 chains use "URZ/UMZ ...-812/881M" sprockets). Quantities are given only where the catalogue makes them certain (one corner track per matching 90-degree curve); chain length, sprocket choice, wear-strip profile and frame parts are **Engineering to confirm**.
+- Corner tracks exist only for 90 degrees, radius 500 / 650 / 1000 mm (tab) or 500 / 585 / 670 / 755 mm (magnetic), for 82.5 mm chain. Other curves are flagged for engineering review.
+- To change the data, edit `catalogue.js` (each block carries its catalogue page number). Re-check against the printed catalogue after any edit.
+
+Catalogue photographs (`assets/catalogue/`) are cropped from the printed Ultraplast catalogue pages and shown on the catalogue page, in the recommendations and in the part groups. Keep that folder next to `index.html` when uploading to GitHub.

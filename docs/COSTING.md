@@ -3,9 +3,9 @@
 The planner ships with **no prices**. Costing is a calculator that multiplies **your own rates** by quantities taken from the conveyor the customer designed.
 
 ## Turn it on (staff only)
-- Open the site with `?costing=1` at the end of the address, e.g. `https://yourname.github.io/ultraplast-conveyor-planner/?costing=1`
+- Press the yellow **Costing** button in the frozen header. The first time, a short form asks for name, company, mobile and email. You approve it (see below). The old `?costing=1` shortcut no longer works.
 - Or set `costing: { enabled: true }` in `config.js` (then every visitor sees it - not recommended on the public site).
-- This is a convenience switch, **not security**. Anyone who knows the address can add `?costing=1`, but they would still see only empty rates. Your rates live only in your browser unless you save a file. For a fully private tool, keep a private copy of the site for staff.
+- This is an approval gate on the page, **not bank-grade security**. The tool ships with no prices; rates live only in the browser unless saved to a file. For a fully private tool, keep a private copy of the site for staff.
 
 ## Use it
 1. Finish the wizard to the Results page, scroll to **Cost estimate (internal)**.
@@ -23,3 +23,12 @@ A line with no rate (or an unknown quantity) is flagged and the total says **INC
 - Not a quotation and never sent to the customer: rates are not in the PDF, the JSON summary or the enquiry.
 - Quantities for legs, frame, guides and ends are indicative (from the planner, not a final design). Motor, drive, structure, controls and installation still need Ultraplast engineering; price them as lots or with manual quantities.
 - If rates change often, keep one rate-card file per product family or per season and load the right one.
+
+
+## Approving and revoking Costing (owner)
+1. Set up the Google Sheet script (`google-sheets/Code.gs`, see GOOGLE_SHEETS_SETUP.md) and put its Web app URL in `config.js` (`enquiry.endpoint`, `sendAs: 'text'`, `successField: 'ok'`). Re-deploy the script after updating `Code.gs` (Manage deployments, edit, New version). Without this, Costing stays LOCKED for everyone.
+2. A visitor presses **Costing** and sends the form. A row appears in the **CostingAccess** tab with Status **Pending**. Optional: put your email in `OWNER_EMAIL` in `Code.gs` to get a mail for each request.
+3. **Approve:** set Status to `Approved`. The visitor presses Costing again and it opens. They are asked only once per device.
+4. **Revoke any time:** set Status to `Revoked` (or delete the row). An open page notices within about 2 minutes (`costing.recheckMs` in `config.js`) and hides Costing; a new click shows "access withdrawn".
+5. Approval belongs to one browser/device (a random code, not personal data). A new device or cleared browser data must ask again.
+6. If the service cannot be reached, Costing stays locked (it never opens "by default").
