@@ -30,6 +30,7 @@
     FLOOR: [8, 'CONTINUOUS', '#888', 0.35], OBSTACLE: [3, 'DASHED', '#2e7d32', 0.25], PRODUCT: [30, 'CONTINUOUS', '#b9770e', 0.25],
     DIM_ENTERED: [7, 'CONTINUOUS', '#111', 0.13], DIM_CALC: [1, 'CONTINUOUS', '#c0392b', 0.13], DIM_IND: [8, 'CONTINUOUS', '#888', 0.13],
     TEXT: [7, 'CONTINUOUS', '#111', 0.13], TITLE: [7, 'CONTINUOUS', '#111', 0.35], MODEL3D: [7, 'CONTINUOUS', '#444', 0.1], BELT3D: [5, 'CONTINUOUS', '#345', 0.1],
+    EQUIP: [5, 'CONTINUOUS', '#1f5fbf', 0.3], EQUIP_IND: [8, 'DASHED', '#777', 0.25], EQUIP3D: [5, 'CONTINUOUS', '#1f5fbf', 0.1],
     FRAME3D_IND: [8, 'CONTINUOUS', '#777', 0.1], SUPPORT3D_IND: [8, 'CONTINUOUS', '#777', 0.1], DRIVE3D_IND: [6, 'CONTINUOUS', '#a0285a', 0.1], FLOOR3D: [9, 'CONTINUOUS', '#bbb', 0.1], OBSTACLE3D: [3, 'CONTINUOUS', '#2e7d32', 0.1]
   };
   var DIMLAYER = { entered: 'DIM_ENTERED', calc: 'DIM_CALC', ind: 'DIM_IND' };
@@ -89,10 +90,26 @@
     P.poly(sts.map(function (s) { return [s.p[0] * MM, s.p[1] * MM]; }), false, 'CENTRE');
     sc.legs.forEach(function (g) { [1, -1].forEach(function (sg) { var c = [g.x + g.l[0] * g.off * sg, g.y + g.l[1] * g.off * sg]; P.poly(rect(c, g.t, g.l, -g.sec, g.sec, -g.sec, g.sec), true, 'SUPPORT_IND'); }); });
     [fS, fE].forEach(function (f) { P.poly(rect(f.p, f.t, f.l, -sc.rollerR, sc.rollerR, -hw - 0.01, hw + 0.01), true, 'DRIVE_IND'); });
-    var mb = sc.motorBox; P.poly(rect(mb.p, mb.t, mb.l, mb.rt[0], mb.rt[1], mb.rl[0], mb.rl[1]), true, 'DRIVE_IND');
+    var mb = sc.motorBox; if (mb) P.poly(rect(mb.p, mb.t, mb.l, mb.rt[0], mb.rt[1], mb.rl[0], mb.rl[1]), true, 'DRIVE_IND');
     var ph = (pos(prod.alongMm) && pos(prod.acrossMm)) ? { a: prod.alongMm / MM, b: prod.acrossMm / MM, h: pos(prod.heightMm) ? prod.heightMm / MM : null } : null;
     if (ph) { var s0 = Math.min(0.15 + ph.a / 2, sc.track.length / 2), pt = sc.track.at(s0), tH = [pt.tx, pt.ty], lH = [-tH[1], tH[0]]; P.poly(rect([pt.x, pt.y], tH, lH, -ph.a / 2, ph.a / 2, -ph.b / 2, ph.b / 2), true, 'PRODUCT'); P.text([pt.x * MM, (pt.y + ph.b / 2) * MM + 0], 'Product ' + Math.round(ph.a * MM) + ' x ' + Math.round(ph.b * MM) + ' mm', 0, 'PRODUCT', { rel: true }); }
     P.text([fS.p[0] * MM, fS.p[1] * MM], 'IN', 0, 'TITLE', { rel: true, mid: true }); P.text([fE.p[0] * MM, fE.p[1] * MM], 'OUT', 0, 'TITLE', { rel: true, mid: true });
+
+    /* drive motor, sensors and other equipment entered by the user (plan) */
+    function eqLayer(e) { return e.sizeEntered.len && e.sizeEntered.wid && e.sizeEntered.h ? 'EQUIP' : 'EQUIP_IND'; }
+    function eqSign(e) { return e.side === 'right' ? -1 : 1; }
+    function eqText(e) { return 'E' + e.n + ' ' + (e.name || e.label); }
+    var p0t = sc.track.at(0);
+    (sc.equip || []).forEach(function (e, i) {
+      var t2 = norm2([e.t[0], e.t[1]]), l2 = [-t2[1], t2[0]], c2 = [e.c[0], e.c[1]], sgn = eqSign(e), cam = e.side === 'over belt';
+      P.poly(rect(c2, t2, l2, -e.len / 2, e.len / 2, -e.wid / 2, e.wid / 2), true, eqLayer(e));
+      if (e.type === 'photoeye') { var lat = sgn * (hw + thk + 0.02 + e.wid / 2), base = [c2[0] - l2[0] * lat, c2[1] - l2[1] * lat], R2 = hw + thk + 0.02; P.line([(base[0] + l2[0] * R2) * MM, (base[1] + l2[1] * R2) * MM], [(base[0] - l2[0] * R2) * MM, (base[1] - l2[1] * R2) * MM], 'EQUIP_IND'); }
+      var out = cam ? 0.5 : sgn * (e.wid / 2 + 0.06), al = 0.7 * ((i % 3) - 1); P.text([(c2[0] + l2[0] * out + t2[0] * al) * MM, (c2[1] + l2[1] * out + t2[1] * al) * MM], eqText(e), 0, eqLayer(e), { rel: true, mid: true });
+      if (e.posEntered && e.sM > 0.001) {   // distance from the inlet, only when the stretch up to the item is straight (dimension then equals the route distance)
+        var pt = sc.track.at(e.sM), chord3 = Math.hypot(pt.x - p0t.x, pt.y - p0t.y, pt.z - p0t.z), plan = Math.hypot(pt.x - p0t.x, pt.y - p0t.y);
+        if (Math.abs(chord3 - e.sM) <= 0.005 * Math.max(1, e.sM) + 0.002) P.dim([p0t.x * MM, p0t.y * MM], [pt.x * MM, pt.y * MM], -(hw * MM + 650 + 300 * (i % 4)), eqText(e) + ' ' + mmTxt(plan) + ' from inlet' + (Math.abs(plan - e.sM) > 0.001 ? ' (route ' + mmTxt(e.sM) + ')' : ''), 'entered');
+      }
+    });
     // belt width dim at the inlet end (placed behind the inlet)
     var wa = L1[0], wb = R1[0], bk = fS.t;
     var up = { a: wb, b: wa }; var sgn0 = (-bk[0] * (-(wa[1] - wb[1])) + -bk[1] * (wa[0] - wb[0])) >= 0 ? 1 : -1;
@@ -135,6 +152,15 @@
     sc.legs.forEach(function (g) { var x = sh.at(g.s) * MM, s = g.sec * MM; E.poly([[x - s, 0], [x + s, 0], [x + s, g.zb * MM], [x - s, g.zb * MM]], true, 'SUPPORT_IND'); });
     var R = sc.rollerR * MM; [fS, fE].forEach(function (f, k) { E.circle([(k ? totalH : 0), f.p[2] * MM - 12 - R], R, 'DRIVE_IND'); });
     if (ph && ph.h) { var xs = Math.min(0.15 + ph.a / 2, totalH / MM / 2) * MM, zs = sts[0].p[2] * MM, w = ph.a * MM; E.poly([[xs - w / 2, zs], [xs + w / 2, zs], [xs + w / 2, zs + ph.h * MM], [xs - w / 2, zs + ph.h * MM]], true, 'PRODUCT'); }
+
+    (sc.equip || []).forEach(function (e, i) {
+      var x = sh.at(Math.max(0, Math.min(sc.track.length, e.sM))) * MM, zc = (e.beltTopZ + e.mountM) * MM, hl = e.len * MM / 2, hh = e.h * MM / 2;
+      E.poly([[x - hl, zc - hh], [x + hl, zc - hh], [x + hl, zc + hh], [x - hl, zc + hh]], true, eqLayer(e));
+      E.text([x + 900 * ((i % 3) - 1), zc + hh + 40], eqText(e), 0, eqLayer(e), { rel: true, mid: true });
+      var yb = -260 - 330 * (i % 4);   // dimensions below the floor line
+      if (e.posEntered && x > 1) E.dim([0, yb], [x, yb], -120, eqText(e) + ' ' + Math.round(x) + ' mm from inlet (horizontal)' + (Math.abs(x - e.sM * MM) > 1 ? ' | route ' + Math.round(e.sM * MM) + ' mm' : ''), 'entered');
+      if (e.mountEntered && Math.abs(e.mountM) > 0.02) E.dim([x + hl + 60, e.beltTopZ * MM], [x + hl + 60, zc], 90, eqText(e) + ' ' + (e.mountM >= 0 ? '+' : '') + Math.round(e.mountM * MM) + ' from belt top', 'entered');
+    });
     var zmax = Math.max.apply(null, top.map(function (p) { return p[1]; })), dimY = Math.max(zmax, (desc.elevations.topOfProductM || 0) * MM) + 500;
     E.dim([0, 0], [0, fS.p[2] * MM], 320, 'Inlet height ' + mmTxt(fS.p[2]) + (desc.elevations.basis === 'illustrative' ? ' (illustrative)' : ''), desc.elevations.basis === 'illustrative' ? 'ind' : 'entered');
     if (Math.abs(fE.p[2] - fS.p[2]) > 0.02) E.dim([totalH, 0], [totalH, fE.p[2] * MM], -320, 'Discharge height ' + mmTxt(fE.p[2]), 'calc');
@@ -142,7 +168,7 @@
     details.forEach(function (d, k) {
       var x1 = xa + d.horizontal * MM, za = sts[0].p[2] * MM; var iz = (function () { var s0 = 0; for (var q = 0; q < k; q++) s0 += details[q].length; return [sc.track.at(s0).z * MM, sc.track.at(s0 + d.length).z * MM]; })();
       E.line([xa, iz[0] - fd * MM - 120], [xa, dimY + 100], 'CENTRE');
-      E.dim([xa, dimY - 150], [x1, dimY - 150], 150 + (k % 2) * 330, 'S' + (k + 1) + ' ' + d.type + ' ' + mmTxt(d.type === 'incline' ? Math.hypot(d.horizontal, d.rise) : d.length) + (d.type === 'incline' ? ' | run ' + Math.round(d.horizontal * MM) + ' rise ' + Math.round(Math.abs(d.rise) * MM) + ' ' + ang(Math.abs(d.angle)) : ''), 'calc');
+      E.dim([xa, dimY - 150], [x1, dimY - 150], 150 + (k % 2) * 330, 'S' + (k + 1) + ' ' + (d.type === 'incline' ? 'incline run ' + mmTxt(d.horizontal) + ' | slope ' + mmTxt(Math.hypot(d.horizontal, d.rise)) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | ' + ang(Math.abs(d.angle)) : d.type + ' ' + mmTxt(d.length)), 'calc');
       xa = x1;
     });
     E.line([xa, 0], [xa, dimY + 100], 'CENTRE');
@@ -163,6 +189,14 @@
     S.dim([-hwm, Math.max(topY, pTop)], [hwm, Math.max(topY, pTop)], 420, wTxt, wKind);
     S.dim([-hwm - tk, 0], [hwm + tk, 0], -300, 'Overall over frame ' + mmTxt(W + 2 * thk) + ' (indicative)', 'ind');
     S.dim([hwm + tk, 0], [hwm + tk, zb], -700, 'Belt top height ' + mmTxt(fS.p[2]), desc.elevations.basis === 'illustrative' ? 'ind' : 'entered');
+
+    (sc.equip || []).forEach(function (e, i) {
+      var sgn = eqSign(e), cam = e.side === 'over belt', lat = cam ? 0 : sgn * (hw + thk + 0.02 + e.wid / 2) * MM, zc = zb + e.mountM * MM, hwid = e.wid * MM / 2, hh = e.h * MM / 2;
+      S.poly([[lat - hwid, zc - hh], [lat + hwid, zc - hh], [lat + hwid, zc + hh], [lat - hwid, zc + hh]], true, eqLayer(e));
+      S.text([lat + 150 * ((i % 3) - 1), zc + hh + 30], 'E' + e.n, 0, eqLayer(e), { rel: true, mid: true });
+      if (e.sizeEntered.wid) S.dim([lat - hwid, zc - hh], [lat + hwid, zc - hh], -60 - 60 * (i % 3), 'E' + e.n + ' W ' + Math.round(e.wid * MM), 'entered');
+      if (e.sizeEntered.h) S.dim([lat + hwid, zc - hh], [lat + hwid, zc + hh], 60 + 60 * (i % 3), 'E' + e.n + ' H ' + Math.round(e.h * MM), 'entered');
+    });
     M.views.push(S); if (FV) M.views.push(FV);
 
     /* ---------- 3-D faces ---------- */
@@ -228,9 +262,9 @@
       else if (e.t === 'text') { var p = T(e.p); if (e.off) p = [p[0] + e.off[0], p[1] + e.off[1]]; d.text(p, e.s, e.size, e.layer, e.rot, e.mid); }
     });
   }
-  /** 2-D DXF: full size, millimetres. Plan at the origin, side elevation below it, end view to the right of the side view. */
-  function toDXF2D(M) {
-    var d = new DXF(), v = M.views, gap = 2500, pl = v[0], sd = v[1], en = v[2], fl = v[3], hP = textSize(pl), hS = textSize(sd), hE = textSize(en);
+  /** Lay the 2-D views out in model space (full size, mm). Returns the extents used. */
+  function layout2D(d, M) {
+    var v = M.views, gap = 2500, pl = v[0], sd = v[1], en = v[2], fl = v[3], hP = textSize(pl), hS = textSize(sd), hE = textSize(en);
     var pW = viewSize(pl)[0], pH = viewSize(pl)[1], sW = viewSize(sd)[0], sH = viewSize(sd)[1];
     // plan: lower-left at (0,0). Floor layout: right of the plan, tops aligned. Side + end view: below, tops aligned.
     var topSide = -(pH + gap);
@@ -245,14 +279,73 @@
     var yb = topSide - sH - 3 * hS;
     ['Entered data = black dimensions, calculated = red, indicative = grey (layers DIM_ENTERED / DIM_CALC / DIM_IND).', 'Layers ending _IND (frame, guides, legs, rollers, motor) are indicative drawing aids, NOT manufacturing details.', 'Dimensions are lines + text, not associative DIMENSION objects. Generated ' + (M.meta.date || '') + ' - for engineering review.'].concat(M.notes.filter(function (n) { return !/INDICATIVE|associative/.test(n); })).forEach(function (t, i) { d.text([0, yb - i * hS * 1.6], t, hS * 0.9, 'TEXT'); });
     var right = Math.max(pW + (fl ? gap + viewSize(fl)[0] : 0), ex + viewSize(en)[0]);
-    return d.finish([[-gap, yb - 8 * hS], [right, pH + 6 * hP]]);
+    var nNotes = 3 + M.notes.filter(function (n) { return !/INDICATIVE|associative/.test(n); }).length;
+    return { gap: gap, right: right, top: pH + 6 * hP, bottom: yb - nNotes * hS * 1.6, hS: hS, hP: hP };
+  }
+  /** 2-D DXF: full size, millimetres. Plan at the origin, side elevation below it, end view to the right of the side view. */
+  function toDXF2D(M) { var d = new DXF(), L = layout2D(d, M); return d.finish([[-L.gap, L.bottom - 8 * L.hS], [L.right, L.top]]); }
+
+  /* ----- schedules (tables) : equipment placed by the user, and the route segments ----- */
+  function mmS(m) { return String(Math.round(m * MM)); }
+  function equipSchedule(M) {
+    var rows = (M.sc.equip || []).map(function (e) {
+      var sz = [e.len, e.wid, e.h].map(mmS).join(' x ') + (e.sizeEntered.len && e.sizeEntered.wid && e.sizeEntered.h ? '' : ' *');
+      return ['E' + e.n, e.label, e.name || '-', e.rating || '-', e.side, e.posEntered ? mmS(e.sM) : 'not entered *', (e.mountEntered ? (e.mountM >= 0 ? '+' : '') + mmS(e.mountM) : 'default *'), sz, mmS(e.beltTopZ + e.mountM), e.note || ''];
+    });
+    return { title: 'EQUIPMENT SCHEDULE (drive motor, sensors, other) - values as entered; * = indicative placeholder, not entered', head: ['Tag', 'Type', 'Name', 'Rating / spec (as entered)', 'Side', 'From inlet (mm, along route)', 'Height above belt top (mm)', 'L x W x H (mm)', 'Centre above floor (mm)', 'Note'], rows: rows };
+  }
+  function segSchedule(M) {
+    var det = (M.inp.path && M.inp.path.details) || [], rows = det.map(function (d, k) {
+      return ['S' + (k + 1), d.type, mmS(d.length), d.type === 'curve' ? mmS(d.radius) : '-', d.type === 'curve' ? ang(d.angle) + ' ' + (d.direction === 'right' ? 'R' : 'L') : (d.type === 'incline' ? ang(Math.abs(d.angle)) : '-'), mmS(d.horizontal), d.type === 'incline' ? mmS(Math.abs(d.rise)) : '-'];
+    });
+    var e = M.desc.elevations;
+    return { title: 'ROUTE SCHEDULE (calculated from entered data)', head: ['Seg', 'Type', 'Length (mm)', 'Radius (mm)', 'Angle', 'Horizontal run (mm)', 'Rise (mm)'], rows: rows, foot: 'Belt width ' + mmS(M.sc.geom.widthM) + ' mm | route length ' + mmS(M.sc.geom.totalM) + ' mm | inlet height ' + mmS(e.inletM) + ' mm | discharge height ' + mmS(e.dischargeM) + ' mm' };
+  }
+  /** Draw a table with grid lines. x0,y0 = top-left. Returns the y of the bottom. */
+  function dxfTable(d, x0, y0, T, h) {
+    var cols = T.head.length, w = [], i, j, rowH = h * 2.0, cw = h * 0.72;
+    for (j = 0; j < cols; j++) { var m = String(T.head[j]).length; T.rows.forEach(function (r) { m = Math.max(m, String(r[j]).length); }); w.push(Math.min(60, m) * cw + h); }
+    var tw = w.reduce(function (a, b) { return a + b; }, 0), y = y0;
+    d.text([x0, y + h * 0.6], T.title, h * 1.1, 'TITLE');
+    function row(cells, bold) { for (var j2 = 0, x = x0; j2 < cols; j2++) { d.text([x + h * 0.4, y - rowH * 0.68], String(cells[j2] === undefined ? '' : cells[j2]).slice(0, 60), h * (bold ? 0.9 : 0.85), 'TEXT'); x += w[j2]; } y -= rowH; d.line([x0, y, 0], [x0 + tw, y, 0], 'TEXT'); }
+    d.line([x0, y, 0], [x0 + tw, y, 0], 'TEXT'); row(T.head, true);
+    if (!T.rows.length) { d.text([x0 + h * 0.4, y - rowH * 0.68], 'None entered', h * 0.85, 'TEXT'); y -= rowH; d.line([x0, y, 0], [x0 + tw, y, 0], 'TEXT'); }
+    T.rows.forEach(function (r) { row(r, false); });
+    for (j = 0, i = x0; j <= cols; j++) { d.line([i, y0, 0], [i, y, 0], 'TEXT'); i += w[j] || 0; }
+    if (T.foot) { d.text([x0, y - rowH * 0.9], T.foot, h * 0.9, 'TEXT'); y -= rowH * 1.4; }
+    return y;
+  }
+  /** ONE DXF with everything: all 2-D views, floor layout, schedules, title block and the 3-D model (placed to the right). */
+  function toDXFAll(M) {
+    var d = new DXF(), L = layout2D(d, M), h = Math.max(40, L.hS), y = L.bottom - 4 * h;
+    var mtitle = (M.meta.title || 'Conveyor general arrangement');
+    // tables
+    var yy = dxfTable(d, 0, y, equipSchedule(M), h); yy = dxfTable(d, 0, yy - 4 * h, segSchedule(M), h);
+    // title block
+    var tb = yy - 5 * h, tx = 0, tw = 90 * h, lines = ['ULTRAPLAST CHAINBELTS PVT. LTD.', mtitle + (M.meta.ref ? '   Ref: ' + M.meta.ref : ''), 'Date ' + (M.meta.date || '') + '    Units: mm    Scale: 1:1 (full size, model space)', 'INDICATIVE drawing - for engineering review, not for manufacture.', 'Contents: plan, floor layout, side elevation, end view, equipment + route schedules, 3-D model (to the right).', 'Dimension colours: black = entered, red = calculated, grey = indicative.'];
+    d.line([tx, tb + 2 * h, 0], [tx + tw, tb + 2 * h, 0], 'TITLE'); d.line([tx + tw, tb + 2 * h, 0], [tx + tw, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx + tw, tb - lines.length * h * 1.7, 0], [tx, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx, tb - lines.length * h * 1.7, 0], [tx, tb + 2 * h, 0], 'TITLE');
+    lines.forEach(function (t, i) { d.text([tx + h, tb - i * h * 1.7 + h * 0.2], t, i === 0 ? h * 1.2 : h * 0.95, i === 3 ? 'DIM_CALC' : 'TITLE'); });
+    var bottom = tb - lines.length * h * 1.7 - 2 * h;
+    // 3-D model placed to the right of the 2-D layout
+    var sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D' };
+    var lo = [1e18, 1e18, 1e18], hi = [-1e18, -1e18, -1e18], src = [1e18, 1e18, 1e18];
+    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; q.p.forEach(function (p) { for (var i = 0; i < 3; i++) src[i] = Math.min(src[i], p[i] * MM); }); });
+    var ox = L.right + 6000 - src[0], oy = L.top - 1000 - (function () { var m = -1e18; sc.polys.forEach(function (q) { if (q.tag !== 'prod') q.p.forEach(function (p) { m = Math.max(m, p[1] * MM); }); }); return m; })();
+    function P3(p) { var q = [p[0] * MM + ox, p[1] * MM + oy, p[2] * MM]; for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return q; }
+    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P3), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' ? nearestAci(q.c) : 0)); });
+    d.poly3(sc.stations.map(function (s) { return P3(s.p); }), 'CENTRE');
+    var h3 = Math.max(60, Math.round(Math.max(hi[0] - lo[0], hi[1] - lo[1]) / 120 / 10) * 10);
+    sc.dims.forEach(function (m) { var a = P3(m.a), b = P3(m.b); d.line(a, b, DIMLAYER[m.kind] || 'DIM_CALC'); var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], dx = b[0] - a[0], dy = b[1] - a[1], rot = Math.atan2(dy, dx) * 180 / Math.PI; if (rot > 90) rot -= 180; if (rot <= -90) rot += 180; d.g(0, 'TEXT'); d.g(8, d.use(DIMLAYER[m.kind] || 'DIM_CALC')); d.g(10, f(mid[0])); d.g(20, f(mid[1])); d.g(30, f(mid[2])); d.g(40, f(h3)); d.g(1, ascii(m.text)); if (Math.abs(dx) + Math.abs(dy) > 1e-6) d.g(50, f(rot)); });
+    sc.tags.forEach(function (t) { if (!/^E\d/.test(t.text)) return; var p = P3(t.p); d.g(0, 'TEXT'); d.g(8, d.use('EQUIP3D')); d.g(10, f(p[0])); d.g(20, f(p[1])); d.g(30, f(p[2])); d.g(40, f(h3)); d.g(1, ascii(t.text)); });
+    d.text([lo[0], hi[1] + h3 * 3], '3-D MODEL (full size, mm) - ' + mtitle, h3 * 1.4, 'TITLE');
+    return d.finish([[Math.min(-L.gap, lo[0]), Math.min(bottom, lo[1]), Math.min(0, lo[2])], [Math.max(L.right, hi[0]), Math.max(L.top, hi[1]), Math.max(0, hi[2])]]);
   }
   /** 3-D DXF: 3DFACE model (layers by part), centre-line, belt-colour on BELT3D, plus dimension annotations. */
   function toDXF3D(M, opt) {
-    opt = opt || {}; var d = new DXF(), sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D' };
+    opt = opt || {}; var d = new DXF(), sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D' };
     var lo = [1e18, 1e18, 1e18], hi = [-1e18, -1e18, -1e18];
     function P(p) { var q = [p[0] * MM, p[1] * MM, p[2] * MM]; for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return q; }
-    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : 0); });
+    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' ? nearestAci(q.c) : 0)); });
     d.poly3(sc.stations.map(function (s) { return P(s.p); }), 'CENTRE');
     var h = Math.max(60, Math.round(Math.max(hi[0] - lo[0], hi[1] - lo[1]) / 120 / 10) * 10);
     sc.dims.forEach(function (m) { var a = P(m.a), b = P(m.b); d.line(a, b, DIMLAYER[m.kind] || 'DIM_CALC'); var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], dx = b[0] - a[0], dy = b[1] - a[1], rot = Math.atan2(dy, dx) * 180 / Math.PI; if (rot > 90) rot -= 180; if (rot <= -90) rot += 180; d.g(0, 'TEXT'); d.g(8, d.use(DIMLAYER[m.kind] || 'DIM_CALC')); d.g(10, f(mid[0])); d.g(20, f(mid[1])); d.g(30, f(mid[2])); d.g(40, f(h)); d.g(1, ascii(m.text)); if (Math.abs(dx) + Math.abs(dy) > 1e-6) d.g(50, f(rot)); });
@@ -309,9 +402,41 @@
     var tb = [282, 251, 124, 34], m = M.meta, e = M.desc.elevations;
     s += '<rect x="' + tb[0] + '" y="' + tb[1] + '" width="' + tb[2] + '" height="' + tb[3] + '" fill="none" stroke="#000" stroke-width="0.5"/><line x1="282" y1="259" x2="406" y2="259" stroke="#000" stroke-width="0.3"/>';
     s += '<text x="285" y="257" font-size="4.2" font-weight="bold">ULTRAPLAST CHAINBELTS PVT. LTD.</text>';
-    [(m.title || 'Conveyor general arrangement') + (m.ref ? '  Ref: ' + m.ref : ''), 'Belt width ' + mmTxt(M.sc.geom.widthM) + ' | route ' + mmTxt(M.sc.geom.totalM) + ' | inlet ' + mmTxt(e.inletM) + ' | discharge ' + mmTxt(e.dischargeM), 'Date ' + (m.date || '') + '  Units: mm  Layout from entered data only', 'INDICATIVE drawing - for engineering review, not for manufacture.', 'Black = entered, red = calculated, grey = indicative (frame, legs, motor).'].forEach(function (t, i) { s += '<text x="285" y="' + (263 + i * 4.3) + '" font-size="2.7"' + (i === 3 ? ' fill="#a33" font-weight="bold"' : '') + '>' + esc(t) + '</text>'; });
+    [(m.title || 'Conveyor general arrangement') + (m.ref ? '  Ref: ' + m.ref : ''), 'Belt width ' + mmTxt(M.sc.geom.widthM) + ' | route ' + mmTxt(M.sc.geom.totalM) + ' | inlet ' + mmTxt(e.inletM) + ' | discharge ' + mmTxt(e.dischargeM), 'Date ' + (m.date || '') + '  Units: mm  Layout from entered data only', 'INDICATIVE drawing - for engineering review, not for manufacture.', 'Black = entered, red = calculated, grey = indicative.' + ((M.sc.equip || []).length ? ' E1-E' + M.sc.equip.length + ': see sheet 2.' : '')].forEach(function (t, i) { s += '<text x="285" y="' + (263 + i * 4.3) + '" font-size="2.7"' + (i === 3 ? ' fill="#a33" font-weight="bold"' : '') + '>' + esc(t) + '</text>'; });
     return s + '</svg>';
   }
 
-  return { build: build, toDXF2D: toDXF2D, toDXF3D: toDXF3D, toSVG: toSVG, nearestAci: nearestAci, LAYERS: LAYERS, ascii: ascii };
+
+  /** Sheet 2 (A3): equipment schedule, route schedule and notes. Returns SVG text for one sheet, drawn at the given y offset. */
+  function sheet2(M, oy) {
+    var W = 420, H = 297, s = '<g transform="translate(0,' + oy + ')"><rect width="' + W + '" height="' + H + '" fill="#fff"/><rect x="8" y="8" width="' + (W - 16) + '" height="' + (H - 16) + '" fill="none" stroke="#000" stroke-width="0.7"/>';
+    s += '<text x="14" y="20" font-size="6" font-weight="bold">ULTRAPLAST CHAINBELTS PVT. LTD. - SCHEDULES</text><text x="14" y="27" font-size="3.2">' + esc((M.meta.title || 'Conveyor general arrangement') + '   Date ' + (M.meta.date || '')) + '</text>';
+    function table(T, y, widths) {
+      var x0 = 14, rowH = 6.2, x = x0, i, j;
+      s += '<text x="' + x0 + '" y="' + y + '" font-size="3.8" font-weight="bold">' + esc(T.title) + '</text>'; y += 3;
+      var tw = widths.reduce(function (a, b) { return a + b; }, 0), rows = [T.head].concat(T.rows.length ? T.rows : [['None entered']]);
+      rows.forEach(function (r, k) {
+        s += '<rect x="' + x0 + '" y="' + y + '" width="' + tw + '" height="' + rowH + '" fill="' + (k === 0 ? '#e9ecef' : 'none') + '" stroke="#555" stroke-width="0.2"/>';
+        for (j = 0, x = x0; j < r.length; j++) { s += '<text x="' + (x + 1.2) + '" y="' + (y + 4.2) + '" font-size="2.7"' + (k === 0 ? ' font-weight="bold"' : '') + '>' + esc(String(r[j]).slice(0, Math.max(6, Math.floor(widths[j] / 1.55)))) + '</text>'; x += widths[j]; if (j) s += '<line x1="' + (x - widths[j]) + '" y1="' + y + '" x2="' + (x - widths[j]) + '" y2="' + (y + rowH) + '" stroke="#555" stroke-width="0.2"/>'; }
+        y += rowH;
+      });
+      if (T.foot) { s += '<text x="' + x0 + '" y="' + (y + 5) + '" font-size="2.9">' + esc(T.foot) + '</text>'; y += 7; }
+      return y + 10;
+    }
+    var y = table(equipSchedule(M), 38, [12, 32, 24, 52, 16, 44, 42, 38, 36, 70]);
+    y = table(segSchedule(M), y, [14, 28, 34, 34, 34, 44, 34]);
+    var notes = ['INDICATIVE drawing - for engineering review, not for manufacture.', 'Dimension colours: black = entered, red = calculated, grey = indicative (frame, legs, placeholder sizes marked *).', 'Dimensions in the DXF are lines and text, not associative AutoCAD DIMENSION objects; they were checked against the geometry they describe.', 'Motor, sensor ratings are shown exactly as typed. This tool does not select or size any motor, sensor, belt, chain or structure.'].concat(M.notes.filter(function (n) { return !/INDICATIVE|associative/.test(n); }));
+    s += '<text x="14" y="' + y + '" font-size="3.8" font-weight="bold">NOTES</text>';
+    notes.forEach(function (t, i) { s += '<text x="14" y="' + (y + 6 + i * 5) + '" font-size="2.9"' + (i === 0 ? ' fill="#a33" font-weight="bold"' : '') + '>' + esc(t) + '</text>'; });
+    return s + '</g>';
+  }
+  function toSVGSheet2(M) { var W = 420, H = 297; return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + 'mm" height="' + H + 'mm" font-family="Arial,Helvetica,sans-serif">' + sheet2(M, 0) + '</svg>'; }
+  /** Both sheets in one SVG file (sheet 1 above sheet 2). */
+  function toSVGAll(M) {
+    var one = toSVG(M); if (!M.ok) return one;
+    var inner = one.replace(/^<svg[^>]*>/, '').replace(/<\/svg>$/, '');
+    return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 614" width="420mm" height="614mm" font-family="Arial,Helvetica,sans-serif"><g>' + inner + '</g>' + sheet2(M, 317) + '</svg>';
+  }
+
+  return { build: build, toDXF2D: toDXF2D, toDXF3D: toDXF3D, toDXFAll: toDXFAll, toSVGSheet2: toSVGSheet2, toSVGAll: toSVGAll, equipSchedule: equipSchedule, segSchedule: segSchedule, toSVG: toSVG, nearestAci: nearestAci, LAYERS: LAYERS, ascii: ascii };
 });

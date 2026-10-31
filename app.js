@@ -30,7 +30,7 @@
         categoryPref: 'auto', material: 'unknown', beltWidth: '', routeLength: '', lanes: '1', transfers: '0', infeedPoints: '1', dischargePoints: '1',
         beltColor: '', productColor: '', friction: '', washdown: 'none', guarding: 'basic', guideRails: false, pitch: '', sprocketTeeth: '', pulleyDia: '', centreDistance: '', drives: ''
       },
-      conditions: ['dry'], obstacles: [], segments: [], contact: { name: '', company: '', email: '', mobile: '+91 ', city: '', state: '', timeline: '', budget: '', comments: '', consent: false },
+      conditions: ['dry'], obstacles: [], segments: [], equipment: [], contact: { name: '', company: '', email: '', mobile: '+91 ', city: '', state: '', timeline: '', budget: '', comments: '', consent: false },
       result: null, enquiry: { status: 'idle', message: '' }, suggested: {}, qfNote: ''
     };
   }
@@ -43,6 +43,7 @@
     r.conditions = state.conditions.slice();
     r.obstacles = JSON.parse(JSON.stringify(state.obstacles));
     r.segments = JSON.parse(JSON.stringify(state.segments));
+    r.equipment = JSON.parse(JSON.stringify(state.equipment));
     return r;
   }
 
@@ -215,6 +216,7 @@
       h.push(field('infeedPoints', 'Infeed points', { hint: 'Places where products are put on the belt. Usually 1.', ph: '1' })); h.push(field('dischargePoints', 'Discharge points', { hint: 'Places where products leave the belt. Usually 1.', ph: '1' }));
       h.push('</div></fieldset>');
       h.push('<fieldset><legend>Route</legend><div id="routeBox">' + routeHtml() + '</div></fieldset>');
+      h.push('<fieldset id="equipSet"><legend>Drive motor and sensors <small>(optional)</small></legend><p class="note">Add your motor, sensors, camera or control panel. They appear in the live 3D view, the results 3D view and every drawing, with the values you type. Leave a size blank and a grey placeholder is drawn. This tool never selects or sizes a motor or sensor.</p><div id="equipBox">' + equipmentHtml() + '</div><div class="btnrow"><button type="button" class="btn ghost" data-add-eq="motor">+ Add motor</button><button type="button" class="btn ghost" data-add-eq="photoeye">+ Add photo-eye sensor</button><button type="button" class="btn ghost" data-add-eq="proximity">+ Add proximity sensor</button><button type="button" class="btn ghost" data-add-eq="other">+ Add other equipment</button></div></fieldset>');
       h.push('<fieldset><legend>Washdown, guarding and safety</legend><div class="grid2">');
       h.push(field('washdown', 'Washdown requirement', { type: 'select', options: [['none', 'None'], ['splash', 'Occasional splash / wipe'], ['washdown', 'Regular washdown']] }));
       h.push(field('guarding', 'Guarding', { type: 'select', options: [['none', 'None requested'], ['basic', 'Basic (nip points, drive)'], ['full', 'Full enclosure']] }));
@@ -232,6 +234,22 @@
     return h.join('');
   }
 
+  var EQ_TYPES = (C && C.EQUIP_TYPES) || {};
+  function equipmentHtml() {
+    if (!state.equipment.length) return '<p class="empty">No motor or sensors added yet.</p>';
+    var mm = ul('mm');
+    function inp(i, k, label, ph, v) { return '<div class="field"><label for="eq_' + k + i + '">' + label + '</label><input type="text" id="eq_' + k + i + '" data-eq="' + k + '" data-i="' + i + '" inputmode="decimal" placeholder="' + ph + '" value="' + esc(v) + '"></div>'; }
+    return state.equipment.map(function (e, i) {
+      var cam = e.type === 'camera';
+      return '<div class="eqrow" role="group" aria-label="Equipment ' + (i + 1) + '"><div class="eqhead"><b>E' + (i + 1) + '</b> <select aria-label="Equipment ' + (i + 1) + ' type" data-eq="type" data-i="' + i + '">' + Object.keys(EQ_TYPES).map(function (k) { return '<option value="' + k + '"' + (k === e.type ? ' selected' : '') + '>' + esc(EQ_TYPES[k]) + '</option>'; }).join('') + '</select>' +
+        '<button type="button" class="btn ghost sm" data-del-eq="' + i + '" aria-label="Remove equipment ' + (i + 1) + '">Remove</button></div><div class="grid3">' +
+        '<div class="field"><label for="eq_name' + i + '">Name / tag</label><input type="text" id="eq_name' + i + '" data-eq="name" data-i="' + i + '" placeholder="e.g. M1, PE-1" value="' + esc(e.name) + '"></div>' +
+        '<div class="field"><label for="eq_rating' + i + '">Rating / spec (as you know it)</label><input type="text" id="eq_rating' + i + '" data-eq="rating" data-i="' + i + '" placeholder="e.g. 0.37 kW, 1440 rpm, 415 V" value="' + esc(e.rating) + '"></div>' +
+        '<div class="field"><label for="eq_side' + i + '">Side</label><select id="eq_side' + i + '" data-eq="side" data-i="' + i + '"' + (cam ? ' disabled' : '') + '><option value="left"' + (e.side !== 'right' ? ' selected' : '') + '>Left of travel</option><option value="right"' + (e.side === 'right' ? ' selected' : '') + '>Right of travel</option></select></div>' +
+        inp(i, 'posMm', 'Position from inlet (' + mm + ')', 'blank = default', e.posMm) + inp(i, 'mountMm', 'Height above belt top (' + mm + ')', 'blank = default', e.mountMm) + '<span></span>' +
+        inp(i, 'lenMm', 'Length along conveyor (' + mm + ')', 'blank = placeholder', e.lenMm) + inp(i, 'widMm', 'Width across (' + mm + ')', 'blank = placeholder', e.widMm) + inp(i, 'bodyHMm', 'Body height (' + mm + ')', 'blank = placeholder', e.bodyHMm) + '</div></div>';
+    }).join('') + '<small class="hint">Position is measured along the belt route from the inlet end. Motor left blank = drawn at the discharge end. Height 0 = level with the belt top; negative = below it.</small>';
+  }
   function obstaclesHtml() {
     if (!state.obstacles.length) return '<p class="empty">No obstacles added. Add columns, machines or doors that the conveyor must avoid.</p>';
     return state.obstacles.map(function (o, i) {
@@ -519,7 +537,7 @@
       inletMm: inp.inletHeight, dischargeMm: inp.dischargeHeight, beltWidthM: plan.widthM, widthNote: plan.widthNote, pulleyDiaMm: inp.pulleyDia, pitchMm: inp.pitch,
       legSpacingMm: P.engineering.legSpacingMm, detail: detail, beltRgb: beltRgbOf(inp, res),
       prod: { alongMm: along, acrossMm: t.acrossMm, heightMm: inp.prodHeight, pitchMm: t.productPitchMm, lanes: t.lanes },
-      fmt: fmtLen, fmtMm: fmtMm
+      equip: inp.equipment, fmt: fmtLen, fmtMm: fmtMm
     };
   }
   /* ---- CAD-style drawing: 2D views + 3D model, DXF / SVG downloads ---- */
@@ -531,10 +549,11 @@
   function cadCard(inp, res) {
     var m; try { m = cadModel = cadBuild(inp, res); } catch (e) { cadModel = null; return '<section class="card"><h3>Engineering drawing (CAD)</h3><p class="banner warn">The drawing could not be generated (' + esc(e.message) + ').</p></section>'; }
     if (!m.ok) return '<section class="card"><h3>Engineering drawing (CAD)</h3><p class="note">' + esc(m.notes[m.notes.length - 1]) + '</p></section>';
-    return '<section class="card" id="cadCard"><h3>Engineering drawing (CAD)</h3><p class="note">A drawing sheet made from your entries: plan view, developed side elevation, end view, floor layout and a 3D view, with length, width, radius, angle, rise and height dimensions. <b>Black</b> = entered, <b>red</b> = calculated, <b>grey</b> = indicative (frame, legs, motor are drawing aids, not Ultraplast engineering data).</p>' +
-      '<div class="cadbtns"><button type="button" class="btn ghost" id="cadDxf2">Download 2D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadDxf3">Download 3D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadSvg">Download drawing sheet (SVG, A3)</button></div>' +
-      '<div class="cadsheet" role="img" aria-label="Engineering drawing sheet">' + CAD.toSVG(m) + '</div>' +
-      '<p class="note">DXF files are full size in millimetres. Dimensions are lines and text, not editable AutoCAD dimension objects. Open the SVG in a browser and use Print &rarr; Save as PDF for a PDF. Engineering review required before any manufacture.</p>' +
+    return '<section class="card" id="cadCard"><h3>Engineering drawing (CAD)</h3><p class="note">Drawing sheets made from your entries: plan view, developed side elevation, end view, floor layout and a 3D view, with length, width, radius, angle, rise and height dimensions, plus your motor and sensors with their positions and sizes, and schedules of equipment and route. <b>Download ALL drawings together</b> gives one AutoCAD file with everything. <b>Black</b> = entered, <b>red</b> = calculated, <b>grey</b> = indicative (frame, legs, motor are drawing aids, not Ultraplast engineering data).</p>' +
+      '<div class="cadbtns"><button type="button" class="btn primary" id="cadAll" title="One DXF with plan, floor layout, side elevation, end view, schedules, title block and the 3D model">Download ALL drawings together (DXF for AutoCAD)</button><button type="button" class="btn ghost" id="cadSvgAll">Download all sheets (SVG)</button><button type="button" class="btn ghost" id="cadDxf2">Download 2D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadDxf3">Download 3D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadSvg">Download drawing sheet (SVG, A3)</button></div>' +
+      '<div class="cadsheet" role="img" aria-label="Engineering drawing sheet 1">' + CAD.toSVG(m) + '</div>' +
+      '<h4>Sheet 2 - equipment and route schedules</h4><div class="cadsheet" role="img" aria-label="Engineering drawing sheet 2: schedules">' + CAD.toSVGSheet2(m) + '</div>' +
+      '<p class="note">DXF files are full size in millimetres. Dimensions are lines and text (checked against the geometry they describe), not editable AutoCAD dimension objects. Open the SVG in a browser and use Print &rarr; Save as PDF for a PDF. Engineering review required before any manufacture.</p>' +
       '<details class="mfg"><summary><b>Can this drawing be used for manufacturing? No.</b></summary><p>It is <b>indicative, for engineering review, not for manufacture</b>. Frame, guides, legs, rollers and motor are placeholder sizes; there is no motor, tension or structural engineering, no bill of materials, and dimensions are lines and text only. It is a correct starting point for Ultraplast engineers, who must supply the real standard parts and calculations and approve each drawing before anything is built from it.</p></details></section>';
   }
   function v3dOpts(inp, res, plan, extra) {
@@ -774,6 +793,7 @@
         Object.keys(s.values).forEach(function (k) { if (f[k] !== undefined) s.values[k] = typeof s.values[k] === 'boolean' ? !!f[k] : String(f[k]); });
         s.conditions = Array.isArray(f.conditions) ? f.conditions.map(String) : [];
         s.obstacles = (f.obstacles || []).map(function (o) { return { name: String(o.name || ''), x: String(o.x || ''), y: String(o.y || ''), w: String(o.w || ''), d: String(o.d || '') }; });
+        s.equipment = (f.equipment || []).map(function (q) { var o = { type: C.EQUIP_TYPES[q.type] ? q.type : 'other', name: String(q.name || ''), side: q.side === 'right' ? 'right' : 'left', rating: String(q.rating || ''), note: String(q.note || '') }; Object.keys(C.EQUIP_KINDS).forEach(function (k) { o[k] = q[k] === undefined || q[k] === null ? '' : String(q[k]); }); return o; });
         s.segments = (f.segments || []).map(function (g) { var n = newSeg(['straight', 'curve', 'incline'].indexOf(g.type) >= 0 ? g.type : 'straight'); Object.keys(n).forEach(function (k) { if (g[k] !== undefined) n[k] = String(g[k]); }); return n; });
         s.suggested = {}; s.advanced = !!f.advanced; s.step = 1; s.maxStep = 4; s.dirty = true;
         state = s; syncHeader(); render();
@@ -800,6 +820,7 @@
     var from = state.unitSystem; if (from === to) return;
     Object.keys(state.values).forEach(function (k) { var kind = C.FIELD_KINDS[k]; if (kind && kind !== 'num' && kind !== 'weight') state.values[k] = convertStr(state.values[k], kind, from, to); });
     state.obstacles.forEach(function (o) { ['x', 'y', 'w', 'd'].forEach(function (k) { o[k] = convertStr(o[k], 'm', from, to); }); });
+    state.equipment.forEach(function (q) { Object.keys(C.EQUIP_KINDS).forEach(function (k) { q[k] = convertStr(q[k], 'mm', from, to); }); });
     state.segments.forEach(function (s) { Object.keys(C.SEGMENT_KINDS).forEach(function (k) { var kind = C.SEGMENT_KINDS[k]; if (kind !== 'deg') s[k] = convertStr(s[k], kind, from, to); }); });
     state.unitSystem = to; render(false);
   }
@@ -852,6 +873,7 @@
     state.dirty = true;
     if (n && t.type !== 'radio') { state.values[n] = t.type === 'checkbox' ? t.checked : t.value; if (state.suggested[n]) { delete state.suggested[n]; var bd = t.closest('.field') && t.closest('.field').querySelector('.badge.sug'); if (bd) { bd.className = 'badge opt'; bd.textContent = 'Edited'; } } live(); if (state.step === 4) updateHoriz(); refreshErrors(); }
     var os = t.getAttribute('data-obs'); if (os) { state.obstacles[+t.getAttribute('data-i')][os] = t.value; live(); }
+    var eq = t.getAttribute('data-eq'); if (eq && eq !== 'type' && state.equipment[+t.getAttribute('data-i')]) { state.equipment[+t.getAttribute('data-i')][eq] = t.value; live(); }
     var sg = t.getAttribute('data-seg'); if (sg && sg !== 'type') { state.segments[+t.getAttribute('data-i')][sg] = t.value; live(); updateHoriz(); }
     if (t.hasAttribute('data-cond')) { var c = t.getAttribute('data-cond'), i = state.conditions.indexOf(c); if (t.checked && i < 0) state.conditions.push(c); if (!t.checked && i >= 0) state.conditions.splice(i, 1); }
   }
@@ -861,6 +883,7 @@
     var n = t.getAttribute('data-name'); if (n && t.tagName === 'SELECT') { state.values[n] = t.value; if (state.suggested[n]) delete state.suggested[n]; live(); }
     if (n === 'weight' || n === 'weightUnit') autoFromWeight();
     if (t.id === 'qfProduct') { var pp = (P.presets || []).filter(function (x) { return x.id === t.value; })[0]; if (pp) applyPreset(pp, true); return; }
+    if (t.getAttribute('data-eq') === 'type') { var qi = +t.getAttribute('data-i'); if (state.equipment[qi]) { state.equipment[qi].type = t.value; $('#equipBox').innerHTML = equipmentHtml(); live(); } return; }
     if (t.getAttribute('data-seg') === 'type') { var s = state.segments[+t.getAttribute('data-i')], nt = newSeg(t.value, s.direction); state.segments[+t.getAttribute('data-i')] = nt; $('#segBox').innerHTML = segmentsHtml(); live(); updateHoriz(); }
     if (t.id === 'advToggle2') { state.advanced = t.checked; var b = $('.adv-box'); if (b) b.hidden = !state.advanced; $('#advToggle').checked = state.advanced; }
     if (t.hasAttribute('data-cond')) onInput(e);
@@ -876,14 +899,16 @@
     if (t.id === 'quickStart') { applyLayout('straight'); state.values.layout = 'straight'; state.dirty = true; go(4); return; }
     if (t.id === 'tryExample') { var EX = { projectName: 'Example - bottle line', industry: 'beverages', floorLength: '20', floorWidth: '6', handling: 'bottles', productName: '500 ml PET bottle', prodLength: '70', prodWidth: '70', prodHeight: '200', weight: '520', weightUnit: 'g', gap: '50', rate: '60', speed: '', hoursPerDay: '16', layout: 'straight', routeLength: '12' }; Object.keys(EX).forEach(function (k) { state.values[k] = EX[k]; }); state.dirty = true; render(false); var tn = $('#stepIntro'); if (tn) tn.textContent = 'Example values filled in. Press Next to see each page, or Skip to the end - then change anything you like.'; return; }
     if (t.id === 'btnSkip') { next(); return; }
-    if (t.id === 'cadDxf2' || t.id === 'cadDxf3' || t.id === 'cadSvg') {
+    if (t.id === 'cadDxf2' || t.id === 'cadDxf3' || t.id === 'cadSvg' || t.id === 'cadAll' || t.id === 'cadSvgAll') {
       var r0 = state.result, nm = slug(r0 && r0.raw && r0.raw.projectName); if (!cadModel) return;
-      try { if (t.id === 'cadDxf2') download('Ultraplast-' + nm + '-2D.dxf', CAD.toDXF2D(cadModel), 'application/dxf'); else if (t.id === 'cadDxf3') download('Ultraplast-' + nm + '-3D.dxf', CAD.toDXF3D(cadModel), 'application/dxf'); else download('Ultraplast-' + nm + '-drawing.svg', CAD.toSVG(cadModel), 'image/svg+xml'); msg('Drawing downloaded.'); } catch (er) { msg('Could not create the drawing file: ' + er.message); }
+      try { if (t.id === 'cadAll') download('Ultraplast-' + nm + '-ALL-drawings.dxf', CAD.toDXFAll(cadModel), 'application/dxf'); else if (t.id === 'cadSvgAll') download('Ultraplast-' + nm + '-ALL-sheets.svg', CAD.toSVGAll(cadModel), 'image/svg+xml'); else if (t.id === 'cadDxf2') download('Ultraplast-' + nm + '-2D.dxf', CAD.toDXF2D(cadModel), 'application/dxf'); else if (t.id === 'cadDxf3') download('Ultraplast-' + nm + '-3D.dxf', CAD.toDXF3D(cadModel), 'application/dxf'); else download('Ultraplast-' + nm + '-drawing.svg', CAD.toSVG(cadModel), 'image/svg+xml'); msg('Drawing downloaded.'); } catch (er) { msg('Could not create the drawing file: ' + er.message); }
       return;
     }
     var swf = t.getAttribute('data-swatch-for'); if (swf !== null) { state.values[swf] = t.getAttribute('data-val'); state.dirty = true; Array.prototype.forEach.call(document.querySelectorAll('[data-swatch-for="' + swf + '"]'), function (b) { b.classList.toggle('on', b === t); }); live(); return; }
     var tb = t.closest ? t.closest('[data-tab]') : null; if (tb) { selectTab(tb.getAttribute('data-tab')); return; }
     var g = t.getAttribute('data-goto'); if (g) { go(+g); return; }
+    var ae = t.getAttribute && t.getAttribute('data-add-eq'); if (ae) { state.equipment.push({ type: ae, name: ae === 'motor' ? 'M' + (state.equipment.filter(function (x) { return x.type === 'motor'; }).length + 1) : '', side: 'left', rating: '', note: '', posMm: '', mountMm: '', lenMm: '', widMm: '', bodyHMm: '' }); $('#equipBox').innerHTML = equipmentHtml(); state.dirty = true; live(); var le = $$('#equipBox .eqrow').pop(); if (le) { var f0 = le.querySelector('input'); if (f0) f0.focus(); } }
+    var de = t.getAttribute && t.getAttribute('data-del-eq'); if (de !== null && de !== undefined) { state.equipment.splice(+de, 1); $('#equipBox').innerHTML = equipmentHtml(); state.dirty = true; live(); }
     if (t.id === 'addObs') { state.obstacles.push({ name: '', x: '', y: '', w: '', d: '' }); $('#obsBox').innerHTML = obstaclesHtml(); var last = $$('#obsBox .row').pop(); if (last) last.querySelector('input').focus(); }
     var d = t.getAttribute('data-del-obs'); if (d !== null) { state.obstacles.splice(+d, 1); $('#obsBox').innerHTML = obstaclesHtml(); live(); }
     var as = t.getAttribute('data-add-seg'); if (as) { state.segments.push(newSeg(as)); $('#segBox').innerHTML = segmentsHtml(); live(); updateHoriz(); }

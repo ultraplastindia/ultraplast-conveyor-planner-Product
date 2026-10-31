@@ -53,6 +53,9 @@
     weight: 'weight', maxWeight: 'weight'
   };
   var OBSTACLE_KINDS = { x: 'm', y: 'm', w: 'm', d: 'm' };
+  /* Drive and sensors the customer places on the conveyor (all optional; sizes left blank are drawn as INDICATIVE placeholders). */
+  var EQUIP_TYPES = { motor: 'Drive motor', photoeye: 'Photo-eye sensor', proximity: 'Proximity sensor', limit: 'Limit switch', encoder: 'Encoder', camera: 'Camera / vision', panel: 'Control panel / junction box', other: 'Other equipment' };
+  var EQUIP_KINDS = { posMm: 'mm', mountMm: 'mm', lenMm: 'mm', widMm: 'mm', bodyHMm: 'mm' };
   var SEGMENT_KINDS = { length: 'm', angle: 'deg', radius: 'mm', horizontal: 'm', rise: 'mm', inclineAngle: 'deg' };
 
   function parseNum(v) {
@@ -106,7 +109,7 @@
     var inp = { unitSystem: raw.unitSystem === undefined ? 'metric' : raw.unitSystem, _sys: sys };
     var k;
     for (k in raw) {
-      if (Object.prototype.hasOwnProperty.call(raw, k) && !FIELD_KINDS[k] && k !== 'obstacles' && k !== 'segments') inp[k] = raw[k];
+      if (Object.prototype.hasOwnProperty.call(raw, k) && !FIELD_KINDS[k] && k !== 'obstacles' && k !== 'segments' && k !== 'equipment') inp[k] = raw[k];
     }
     for (k in FIELD_KINDS) {
       var kind = FIELD_KINDS[k];
@@ -124,6 +127,11 @@
       for (var kk in OBSTACLE_KINDS) r[kk] = toMetric('m', parseNum(o[kk]), sys);
       return r;
     }).filter(function (o) { return !(o.x === null && o.y === null && o.w === null && o.d === null); });
+    inp.equipment = (raw.equipment || []).map(function (e) {
+      var r = { type: EQUIP_TYPES[e.type] ? e.type : 'other', name: String(e.name || '').trim(), side: e.side === 'right' ? 'right' : 'left', rating: String(e.rating || '').trim(), note: String(e.note || '').trim() };
+      for (var kk in EQUIP_KINDS) r[kk] = toMetric('mm', parseNum(e[kk]), sys);
+      return r;
+    }).filter(function (e) { return !(e.name === '' && e.rating === '' && e.note === '' && e.posMm === null && e.mountMm === null && e.lenMm === null && e.widMm === null && e.bodyHMm === null); });
     inp.segments = (raw.segments || []).map(function (s) {
       var r = { type: s.type || 'straight', direction: s.direction || 'left' };
       for (var kk in SEGMENT_KINDS) r[kk] = toMetric(SEGMENT_KINDS[kk], parseNum(s[kk]), sys);
@@ -192,6 +200,15 @@
         if (o[p] !== null && isNaN(o[p])) err('obstacle' + i, 'Obstacle ' + (i + 1) + ': ' + p.toUpperCase() + ' must be a number.', 1);
         else if (o[p] !== null && (p === 'w' || p === 'd') && o[p] <= 0) err('obstacle' + i, 'Obstacle ' + (i + 1) + ': size must be greater than zero.', 1);
         else if (o[p] !== null && o[p] < 0) err('obstacle' + i, 'Obstacle ' + (i + 1) + ': position cannot be negative.', 1);
+      });
+    });
+    (inp.equipment || []).forEach(function (e, i) {
+      var nm = 'Equipment ' + (i + 1) + (e.name ? ' (' + e.name + ')' : '') + ': ';
+      var lbl = { posMm: 'position along conveyor', mountMm: 'mounting height', lenMm: 'length', widMm: 'width', bodyHMm: 'height' };
+      Object.keys(EQUIP_KINDS).forEach(function (p) {
+        if (e[p] !== null && isNaN(e[p])) err('equip' + i, nm + lbl[p] + ' must be a number.', 4);
+        else if (e[p] !== null && p === 'posMm' && e[p] < 0) err('equip' + i, nm + 'position along the conveyor cannot be negative.', 4);
+        else if (e[p] !== null && (p === 'lenMm' || p === 'widMm' || p === 'bodyHMm') && e[p] <= 0) err('equip' + i, nm + lbl[p] + ' must be greater than zero.', 4);
       });
     });
     (inp.segments || []).forEach(function (s, i) {
@@ -464,6 +481,12 @@
         if (hit) { out.collisions.push(o.name || ('Obstacle ' + (idx + 1))); issue('error', 'The proposed route passes through "' + (o.name || 'Obstacle ' + (idx + 1)) + '". Move the start point, change the layout, or relocate the obstacle.'); }
       });
     }
+    /* --- drive and sensors entered by the customer (shown as entered; this tool does not select or size them) --- */
+    out.placed = (inp.equipment || []).map(function (e, i) {
+      var total = out.path ? out.path.total * 1000 : null, label = (EQUIP_TYPES[e.type] || 'Equipment'), onRoute = !(num(e.posMm) && total !== null && e.posMm > total + 0.5);
+      if (!onRoute) issue('warning', 'Equipment ' + (i + 1) + ' (' + (e.name || label) + '): position ' + round(e.posMm, 0) + ' mm is beyond the route length (' + round(total, 0) + ' mm). It is drawn at the discharge end.');
+      return { n: i + 1, type: e.type, label: label, name: e.name, side: e.side, posMm: num(e.posMm) ? e.posMm : null, mountMm: num(e.mountMm) ? e.mountMm : null, lenMm: num(e.lenMm) ? e.lenMm : null, widMm: num(e.widMm) ? e.widMm : null, bodyHMm: num(e.bodyHMm) ? e.bodyHMm : null, rating: e.rating, note: e.note, onRoute: onRoute };
+    });
     if (out.path && num(inp.endX) && num(inp.endY)) {
       var dd = Math.hypot(out.path.end.x - inp.endX, out.path.end.y - inp.endY);
       out.endCheck = { distance: round(dd, 2) };
@@ -673,6 +696,11 @@
       if (inc.length) add('Incline / decline sections', inc.length, 'section(s)', inc.map(function (c) { return round(c.angle, 1) + ' deg over ' + round(c.horizontal, 2) + ' m run'; }).join('; ') + '. Cleats / surface profile to be confirmed.', STATUS.CALC);
     }
     if (num(inp.transfers) && inp.transfers > 0) add('Transfer plates / transfer arrangements', inp.transfers, 'transfer(s)', 'Number of transfer points entered by customer.', STATUS.CUSTOMER);
+    (function () {
+      var m = out.placed.filter(function (e) { return e.type === 'motor'; }), s = out.placed.filter(function (e) { return e.type !== 'motor'; });
+      if (m.length) add('Drive motor(s) placed in the drawing', m.length, 'motor(s)', m.map(function (e) { return (e.name || 'Motor') + (e.rating ? ' - ' + e.rating : ' (rating not entered)'); }).join('; ') + '. Customer-stated only: motor and gearbox sizing remains with Ultraplast engineering.', STATUS.CUSTOMER);
+      if (s.length) add('Sensors and other equipment placed in the drawing', s.length, 'item(s)', s.map(function (e) { return (e.name || e.label) + (e.posMm !== null ? ' at ' + round(e.posMm, 0) + ' mm' : ''); }).join('; ') + '. Customer-stated positions; selection, wiring and controls need engineering.', STATUS.CUSTOMER);
+    })();
     if (inp.feeding === 'automated' || inp.discharge === 'automated' || (inp.accumulation && inp.accumulation !== 'none') || inp.upstream || inp.downstream) add('Sensors and controls', 'To be engineered', null, 'Suggested because of automated handling, accumulation or connected machines. Count depends on control philosophy.', STATUS.REVIEW);
     if (inp.guarding && inp.guarding !== 'none') add('Guards and safety accessories', 'To be engineered', null, 'Guarding level requested: ' + inp.guarding + '. Risk assessment required.', STATUS.REVIEW);
     if (inp.washdown && inp.washdown !== 'none' || inp.foodContact === 'direct') add('Hygienic / washdown construction', 'To be engineered', null, 'Materials, IP rating and drainage need specification.', STATUS.REVIEW);
@@ -701,7 +729,7 @@
   }
 
   return {
-    STATUS: STATUS, FIELD_KINDS: FIELD_KINDS, SEGMENT_KINDS: SEGMENT_KINDS, OBSTACLE_KINDS: OBSTACLE_KINDS, LABELS: LABELS,
+    STATUS: STATUS, FIELD_KINDS: FIELD_KINDS, SEGMENT_KINDS: SEGMENT_KINDS, OBSTACLE_KINDS: OBSTACLE_KINDS, EQUIP_TYPES: EQUIP_TYPES, EQUIP_KINDS: EQUIP_KINDS, LABELS: LABELS,
     parseNum: parseNum, toMetric: toMetric, fromMetric: fromMetric, weightToKg: weightToKg, round: round,
     normalize: normalize, validate: validate, requiredForStep: requiredForStep,
     buildPath: buildPath, segmentComplete: segmentComplete, segmentsFromInputs: segmentsFromInputs, recommend: recommend, analyse: analyse

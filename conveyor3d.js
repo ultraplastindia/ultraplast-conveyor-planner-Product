@@ -24,6 +24,13 @@
     belt: [52, 58, 68], frame: [176, 182, 190], guide: [214, 217, 222], leg: [150, 156, 164], roller: [120, 126, 132], motor: [196, 30, 45],
     floor: [236, 238, 241], obst: [196, 70, 70], prodA: [226, 164, 72], prodB: [212, 146, 56]
   };
+  /* Placeholder body sizes (metres) for drive and sensors when the user has not typed a size. NOT specifications. mount = centre height above the belt top. */
+  var EQ = {
+    motor: { len: 0.26, wid: 0.16, h: 0.16, mount: -0.12, rgb: [196, 30, 45], name: 'Drive motor' }, photoeye: { len: 0.05, wid: 0.04, h: 0.04, mount: 0.10, rgb: [30, 110, 210], name: 'Photo-eye sensor' },
+    proximity: { len: 0.04, wid: 0.04, h: 0.06, mount: 0.08, rgb: [20, 150, 150], name: 'Proximity sensor' }, limit: { len: 0.06, wid: 0.04, h: 0.05, mount: 0.05, rgb: [150, 80, 200], name: 'Limit switch' },
+    encoder: { len: 0.06, wid: 0.06, h: 0.06, mount: -0.12, rgb: [210, 120, 40], name: 'Encoder' }, camera: { len: 0.10, wid: 0.08, h: 0.08, mount: 0.45, rgb: [60, 62, 72], name: 'Camera / vision' },
+    panel: { len: 0.30, wid: 0.15, h: 0.40, mount: -0.30, rgb: [232, 188, 56], name: 'Control panel' }, other: { len: 0.10, wid: 0.10, h: 0.10, mount: 0.10, rgb: [120, 130, 140], name: 'Equipment' }
+  };
 
   function hexToRgb(h) { var m = /^#?([0-9a-f]{6})$/i.exec(String(h || '')); if (!m) return null; var n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
   var num = function (v) { return typeof v === 'number' && isFinite(v); };
@@ -220,13 +227,14 @@
       var c = frameFrom(add(fr.p, mul(fr.u, -(bt + R))), fr.t); c.l = fr.l; c.u = fr.u;
       cylinder(c, R, -hw - 0.01, hw + 0.01, COL.roller, { tag: 'drive' }).forEach(function (q) { sc.polys.push(q); });
     });
-    obox(fE.p, fE.t, fE.l, fE.u, [-0.30, -0.04], [hw + thk + 0.02, hw + thk + 0.18], [-0.20, -0.04], COL.motor, { tag: 'drive' }).forEach(function (q) { sc.polys.push(q); });
+    var equipIn = (inp.equip || []).filter(function (e) { return e && EQ[e.type]; }), userMotor = equipIn.some(function (e) { return e.type === 'motor'; });
+    if (!userMotor) obox(fE.p, fE.t, fE.l, fE.u, [-0.30, -0.04], [hw + thk + 0.02, hw + thk + 0.18], [-0.20, -0.04], COL.motor, { tag: 'drive' }).forEach(function (q) { sc.polys.push(q); });
 
     // support legs (indicative spacing unless configured)
     var spacing = pos(inp.legSpacingMm) ? inp.legSpacingMm / 1000 : IND.legSpacing, legPos = [];
     if (total < 0.6) legPos = [total / 2]; else { var nSeg = Math.max(1, Math.ceil((total - 0.5) / spacing)); for (i = 0; i <= nSeg; i++) legPos.push(0.25 + (total - 0.5) * i / nSeg); }
     sc.legCount = 0; sc.legs = []; sc.rollerR = R; sc.hw = hw; sc.thk = thk; sc.fd = fd; sc.guideH = gH;
-    sc.motorBox = { p: fE.p, t: fE.t, l: fE.l, u: fE.u, rt: [-0.30, -0.04], rl: [hw + thk + 0.02, hw + thk + 0.18], ru: [-0.20, -0.04] };
+    sc.motorBox = userMotor ? null : { p: fE.p, t: fE.t, l: fE.l, u: fE.u, rt: [-0.30, -0.04], rl: [hw + thk + 0.02, hw + thk + 0.18], ru: [-0.20, -0.04] };
     sc.obstacles = (inp.obstacles || []).filter(function (b) { return pos(b.w) && pos(b.d) && num(b.x) && num(b.y); }).map(function (b, i) { return { x: b.x, y: b.y, w: b.w, d: b.d, h: IND.obstacleH, name: b.name || 'Obstacle ' + (i + 1) }; });
     legPos.forEach(function (s) {
       var pt = track.at(s), tH = norm([pt.tx, pt.ty, 0]), lH = norm([-tH[1], tH[0], 0]), uu = [0, 0, 1], slopeCos = Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz));
@@ -240,6 +248,56 @@
       });
       obox(P0, tH, lH, uu, [-0.015, 0.015], [-off, off], [zb - 0.05, zb - 0.02], COL.leg, { tag: 'support' }).forEach(function (q) { sc.polys.push(q); });
     });
+
+    /* ----- drive motor, sensors and other equipment placed by the user ----- */
+    sc.equip = [];
+    var eqNotes = {};
+    equipIn.forEach(function (e, i) {
+      var D = EQ[e.type], mm = function (v) { return pos(v) ? v / 1000 : null; };
+      var len = mm(e.lenMm), wid = mm(e.widMm), bh = mm(e.bodyHMm), sizeEntered = { len: len !== null, wid: wid !== null, h: bh !== null };
+      len = len === null ? D.len : len; wid = wid === null ? D.wid : wid; bh = bh === null ? D.h : bh;
+      var posEntered = num(e.posMm) && e.posMm >= 0, onRoute = !(posEntered && e.posMm / 1000 > total + 0.0005);
+      var sM = posEntered && onRoute ? e.posMm / 1000 : (e.type === 'motor' || e.type === 'encoder' ? total : total / 2);
+      var dAlong = !posEntered && (e.type === 'motor') ? -0.17 : 0;
+      var mountEntered = num(e.mountMm), mount = mountEntered ? e.mountMm / 1000 : D.mount;
+      var pt = track.at(Math.max(0, Math.min(total, sM))), tv = norm([pt.tx, pt.ty, pt.tz]), fr = frameFrom([pt.x, pt.y, pt.z], tv), sg = e.side === 'right' ? -1 : 1, camera = e.type === 'camera';
+      var lat = camera ? 0 : sg * (hw + thk + 0.02 + wid / 2), rgb = D.rgb, n = i + 1;
+      var cen = add(add(add(fr.p, mul(fr.t, dAlong)), mul(fr.l, lat)), mul(fr.u, mount));
+      obox(cen, fr.t, fr.l, fr.u, [-len / 2, len / 2], [-wid / 2, wid / 2], [-bh / 2, bh / 2], rgb, { tag: 'equip' }).forEach(function (q) { sc.polys.push(q); });
+      if (camera) {   // simple pole + arm so the camera is not floating
+        var tH = norm([pt.tx, pt.ty, 0]), lH = [-tH[1], tH[0], 0], px = sg * (hw + thk + 0.06), zc = cen[2];
+        obox([pt.x, pt.y, 0], tH, lH, [0, 0, 1], [-0.015, 0.015], [px - 0.015, px + 0.015], [0, zc], COL.leg, { tag: 'equip', skipBottom: true }).forEach(function (q) { sc.polys.push(q); });
+        obox([pt.x, pt.y, zc - 0.015], tH, lH, [0, 0, 1], [-0.015, 0.015], [Math.min(px, 0), Math.max(px, 0)], [0, 0.03], COL.leg, { tag: 'equip' }).forEach(function (q) { sc.polys.push(q); });
+      }
+      if (e.type === 'photoeye') {   // beam across the belt + receiver / reflector on the other side
+        var oppLat = -sg * (hw + thk + 0.02 + 0.015), oc = add(add(fr.p, mul(fr.l, oppLat)), mul(fr.u, mount));
+        obox(oc, fr.t, fr.l, fr.u, [-0.015, 0.015], [-0.015, 0.015], [-0.02, 0.02], rgb, { tag: 'equip' }).forEach(function (q) { sc.polys.push(q); });
+        var bc = add(fr.p, mul(fr.u, mount));
+        obox(bc, fr.t, fr.l, fr.u, [-0.004, 0.004], [-(hw + thk + 0.02), hw + thk + 0.02], [-0.004, 0.004], [235, 40, 40], { tag: 'equip', a: 0.9 }).forEach(function (q) { sc.polys.push(q); });
+      }
+      var szTxt = [sizeEntered.len ? 'L' + Math.round(len * 1000) : null, sizeEntered.wid ? 'W' + Math.round(wid * 1000) : null, sizeEntered.h ? 'H' + Math.round(bh * 1000) : null].filter(Boolean).join(' ');
+      var txt = 'E' + n + ' ' + (e.name || D.name) + (e.rating ? ' · ' + e.rating : '') + (szTxt ? ' · ' + szTxt + ' mm' : '') + (posEntered && onRoute ? ' · @ ' + fmtMm(e.posMm) : '');
+      tag(add(cen, [0, 0, bh / 2 + 0.06]), txt + (posEntered && onRoute ? '' : ' · position indicative'), (posEntered && onRoute) || e.rating || e.name || sizeEntered.len || sizeEntered.wid || sizeEntered.h ? 'entered' : 'ind', 'E' + n);
+      if (detail && posEntered && onRoute && e.posMm > 1) {   // distance from the inlet, along the route (only drawn when that stretch is straight so the line equals the route distance)
+        var p0 = track.at(0), chord = Math.hypot(pt.x - p0.x, pt.y - p0.y, pt.z - p0.z);
+        if (Math.abs(chord - sM) <= 0.005 * Math.max(1, sM) + 0.002) {
+          var oo = sg * (hw + thk + 0.55 + 0.12 * (i % 3)), a0 = [p0.x + (-p0.ty) * oo, p0.y + p0.tx * oo, p0.z], b0 = [pt.x + (-pt.ty) * oo, pt.y + pt.tx * oo, pt.z];
+          dim(a0, b0, 'E' + n + ' ' + fmtMm(e.posMm) + ' from inlet', 'entered', { off: [0, 12 + 12 * (i % 3)] });
+        }
+      }
+      if (detail && mountEntered && Math.abs(mount) > 0.005) {   // mounting height of the body centre above (or below) the belt top
+        var zt = [cen[0], cen[1], pt.z], zb2 = [cen[0], cen[1], cen[2]];
+        dim(zt, zb2, 'E' + n + ' ' + (mount >= 0 ? '+' : '') + fmtMm(mount * 1000) + ' from belt top', 'entered', { off: [8, 0] });
+      }
+      if (!sizeEntered.len && !sizeEntered.wid && !sizeEntered.h) eqNotes[D.name] = 1;
+      sc.equip.push({ n: n, type: e.type, label: D.name, name: e.name || '', rating: e.rating || '', side: camera ? 'over belt' : (sg > 0 ? 'left' : 'right'), sM: sM, posEntered: posEntered && onRoute, onRoute: onRoute, mountM: mount, mountEntered: mountEntered, len: len, wid: wid, h: bh, sizeEntered: sizeEntered, c: cen, t: fr.t, l: fr.l, u: fr.u, beltTopZ: pt.z, note: e.note || '' });
+      grow(clo, chi, [cen[0] - len - wid, cen[1] - len - wid, 0]); grow(clo, chi, [cen[0] + len + wid, cen[1] + len + wid, cen[2] + bh]);
+      grow(lo, hi, [cen[0] - len - wid, cen[1] - len - wid, 0]); grow(lo, hi, [cen[0] + len + wid, cen[1] + len + wid, cen[2] + bh]);
+    });
+    if (sc.equip.length) {
+      sc.notes.push('Motor and sensors are drawn at the position and size you entered; anything left blank uses an indicative placeholder (labels in grey). The tool does not select or size any motor or sensor.');
+      if (sc.equip.some(function (e) { return !e.posEntered; })) sc.notes.push('Equipment without a position along the conveyor is placed at the discharge end (motor) or mid-route (others) for illustration only.');
+    }
 
     /* bounds */
     sts.forEach(function (st) {
@@ -257,7 +315,7 @@
     dim(add(at3(fS, -0.3, hw, 0), [0, 0, 0.002]), add(at3(fS, -0.3, -hw, 0), [0, 0, 0.002]), 'Belt width ' + fmtMm(W_ * 1000) + (wEntered ? '' : ' (not entered)'), wEntered ? 'entered' : 'ind', { off: [0, -10] });
     tag(add(at3(fS, -0.45, 0, 0.12), [0, 0, 0]), 'IN', 'io'); tag(add(at3(fE, 0.45, 0, 0.12), [0, 0, 0]), 'OUT', 'io');
     if (detail) {
-      tag(add(at3(fE, 0, hw + thk + 0.1, -0.12), [0, 0, 0]), 'Drive end + motor (indicative)', 'ind');
+      tag(add(at3(fE, 0, hw + thk + 0.1, -0.12), [0, 0, 0]), userMotor ? 'Drive end (indicative)' : 'Drive end + motor (indicative)', 'ind');
       tag(add(at3(fS, 0, -hw - thk - 0.05, -0.12), [0, 0, 0]), 'Idler end (indicative)', 'ind');
       var zS = fS.p[2], zE = fE.p[2], offW = hw + thk + 0.35, lS = fS.l, lE = fE.l;
       if (zS > 0.15) dim([fS.p[0] + lS[0] * offW, fS.p[1] + lS[1] * offW, 0], [fS.p[0] + lS[0] * offW, fS.p[1] + lS[1] * offW, zS], 'Inlet ' + fmtMm(zS * 1000) + (base.basis === 'illustrative' ? ' (illustrative)' : ''), base.basis === 'illustrative' ? 'ind' : 'entered', { off: [-4, 0] });
@@ -311,7 +369,7 @@
     var prodRgb = opts.productRgb || null, shadeA = prodRgb || COL.prodA, shadeB = prodRgb ? prodRgb.map(function (c) { return Math.round(c * 0.88); }) : COL.prodB;
     var bl = sc.beltRgb ? 0.299 * sc.beltRgb[0] + 0.587 * sc.beltRgb[1] + 0.114 * sc.beltRgb[2] : 60, slatCol = bl > 140 ? 'rgba(0,0,0,.28)' : 'rgba(255,255,255,.22)';
     var fmt = opts.scene.fmt || function (m) { return m.toFixed(2) + ' m'; };
-    var show = { dims: !compact, prods: true, frame: true, floor: true };
+    var show = { dims: !compact, prods: true, frame: true, floor: true, equip: true };
     var cam = { yaw: -0.9, pitch: 0.5, dist: 10, target: [0, 0, 0], ortho: false }, fitMode = 'conveyor';
     if (sc.empty) fitMode = 'floor';
     if (opts.view) { if (typeof opts.view.yaw === 'number') cam.yaw = opts.view.yaw; if (typeof opts.view.pitch === 'number') cam.pitch = opts.view.pitch; cam.ortho = !!opts.view.ortho; }
@@ -334,7 +392,7 @@
       '<div class="v3d-bar v3d-opts">' + (canRun ? '<button type="button" class="btn sm primary" data-a="play">Play</button><button type="button" class="btn sm" data-a="restart">Restart</button>' + (compact ? '' : '<button type="button" class="btn sm" data-a="stop" aria-pressed="false">Stop belt (test)</button>') + '<label class="sim-speed">Playback <select data-a="scale">' + scales.map(function (x) { return '<option value="' + x + '"' + (x === scale ? ' selected' : '') + '>' + x + '×</option>'; }).join('') + '</select></label>' +
         (compact ? '' : '<label class="sim-speed">Belt speed (m/min) <input type="number" min="0.5" step="0.5" inputmode="decimal" data-a="speed" value="' + spdTxt + '" style="width:90px"></label>') : '') +
       '<label class="chk"><input type="checkbox" data-t="dims"' + (show.dims ? ' checked' : '') + '> Dimensions</label><label class="chk"><input type="checkbox" data-t="prods" checked> Products</label>' +
-      '<label class="chk"><input type="checkbox" data-t="frame" checked> Frame, supports, drive (indicative)</label><label class="chk"><input type="checkbox" data-t="floor" checked> Floor and obstacles</label></div>' +
+      '<label class="chk"><input type="checkbox" data-t="frame" checked> Frame, supports, drive (indicative)</label><label class="chk"><input type="checkbox" data-t="equip" checked> Motor and sensors</label><label class="chk"><input type="checkbox" data-t="floor" checked> Floor and obstacles</label></div>' +
       (compact || !canRun ? '' : '<p class="note" data-o="stopmsg" role="status"></p><div class="behave"><h4>Product behaviour check <span class="note">(illustrative - generic friction values, see notes)</span></h4><p data-o="vmax" class="vmax"></p><ul class="checks" data-o="checks"></ul>' +
         '<div class="v3d-bar"><label class="sim-speed">Belt-product friction μ <input type="number" min="0.05" max="1.5" step="0.01" data-b="mu" style="width:80px" value="' + beh.mu + '"></label>' +
         '<label class="sim-speed">Centre of gravity height (% of product) <input type="number" min="10" max="95" step="1" data-b="cog" style="width:80px" value="' + Math.round(beh.cogRatio * 100) + '"></label>' +
@@ -467,7 +525,7 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cw, chh);
       var g = ctx.createLinearGradient(0, 0, 0, chh); g.addColorStop(0, '#f7f8fa'); g.addColorStop(1, '#e4e7ec'); ctx.fillStyle = g; ctx.fillRect(0, 0, cw, chh);
       setupCam();
-      var below = camPos[2] < 0, items = [], hid = { floor: !show.floor, obst: !show.floor, frame: !show.frame, support: !show.frame, drive: !show.frame };
+      var below = camPos[2] < 0, items = [], hid = { floor: !show.floor, obst: !show.floor, frame: !show.frame, support: !show.frame, drive: !show.frame, equip: !show.equip };
       var all = sc.polys.concat(productPolys()), k;
       for (k = 0; k < all.length; k++) {
         var q = all[k]; if (hid[q.tag]) continue;
