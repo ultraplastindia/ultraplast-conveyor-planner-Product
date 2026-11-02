@@ -10,7 +10,7 @@ window.UCP_CONFIG = {
     // Public form-endpoint URL, e.g. a Formspree / Web3Forms / Google Apps Script web-app /
     // your own server URL that accepts JSON via POST. Leave '' until configured.
     // While '' the app NEVER claims an enquiry was sent; it offers an email draft instead.
-    endpoint: '',
+    endpoint: 'https://script.google.com/macros/s/AKfycbzMgREGVuai5EDxCO27dduL46QPKnzjUc9gVaiOdDFkpM1huVjl3IzBwUJVqrluQa8/exec',
     timeoutMs: 15000,
     // 'json'  = normal JSON request (Formspree, own server).
     // 'text'  = JSON sent as text/plain - REQUIRED for a Google Apps Script web app (avoids a blocked CORS pre-flight).
