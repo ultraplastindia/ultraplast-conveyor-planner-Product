@@ -284,3 +284,16 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px rgba(200,16,46,.12)
 .eqhead{display:flex;gap:10px;align-items:center;margin-bottom:8px}.eqhead select{flex:1 1 auto;min-width:0;width:auto}
 .eqrow .field{margin-bottom:10px}
 @media(max-width:640px){.eqrow .grid3{grid-template-columns:1fr}}
+
+/* hydraulic stand: route-row option and the raise / lower control */
+.hydrow{flex-basis:100%;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:flex-end;border-top:1px dashed var(--line);padding-top:8px;margin-top:2px}
+.hydchk{flex-basis:100%;display:flex;align-items:center;gap:8px;margin:0;cursor:pointer}
+.hydchk input{width:22px;height:22px;min-height:0;flex:none}
+.hydnote{flex-basis:100%;margin:0}
+.hydpanel{border:1px solid #9db7e0;border-left:5px solid #1f5fbf;border-radius:10px;padding:10px 12px;margin:10px 0;background:#f4f8ff}
+.hydpanel h4{margin:0 0 6px}
+.hydctl{margin:0 0 10px}
+.hydbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
+.hydbtns input[type=range]{flex:1 1 160px;min-height:34px;accent-color:#1f5fbf}
+.hydread{margin:2px 0;font-weight:600}
+@media (prefers-color-scheme:dark){.hydpanel{background:#1b2433;border-color:#34507d}}

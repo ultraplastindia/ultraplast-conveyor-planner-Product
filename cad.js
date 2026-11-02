@@ -31,6 +31,7 @@
     DIM_ENTERED: [7, 'CONTINUOUS', '#111', 0.13], DIM_CALC: [1, 'CONTINUOUS', '#c0392b', 0.13], DIM_IND: [8, 'CONTINUOUS', '#888', 0.13],
     TEXT: [7, 'CONTINUOUS', '#111', 0.13], TITLE: [7, 'CONTINUOUS', '#111', 0.35], MODEL3D: [7, 'CONTINUOUS', '#444', 0.1], BELT3D: [5, 'CONTINUOUS', '#345', 0.1],
     EQUIP: [5, 'CONTINUOUS', '#1f5fbf', 0.3], EQUIP_IND: [8, 'DASHED', '#777', 0.25], EQUIP3D: [5, 'CONTINUOUS', '#1f5fbf', 0.1],
+    HYD: [5, 'CONTINUOUS', '#1f5fbf', 0.3], HYD_IND: [8, 'DASHED', '#777', 0.25], HYD3D: [5, 'CONTINUOUS', '#1f5fbf', 0.1],
     FRAME3D_IND: [8, 'CONTINUOUS', '#777', 0.1], SUPPORT3D_IND: [8, 'CONTINUOUS', '#777', 0.1], DRIVE3D_IND: [6, 'CONTINUOUS', '#a0285a', 0.1], FLOOR3D: [9, 'CONTINUOUS', '#bbb', 0.1], OBSTACLE3D: [3, 'CONTINUOUS', '#2e7d32', 0.1]
   };
   var DIMLAYER = { entered: 'DIM_ENTERED', calc: 'DIM_CALC', ind: 'DIM_IND' };
@@ -110,6 +111,13 @@
         if (Math.abs(chord3 - e.sM) <= 0.005 * Math.max(1, e.sM) + 0.002) P.dim([p0t.x * MM, p0t.y * MM], [pt.x * MM, pt.y * MM], -(hw * MM + 650 + 300 * (i % 4)), eqText(e) + ' ' + mmTxt(plan) + ' from inlet' + (Math.abs(plan - e.sM) > 0.001 ? ' (route ' + mmTxt(e.sM) + ')' : ''), 'entered');
       }
     });
+    /* hydraulic stands (plan): base plates, cylinder bodies, pivot and hand pump */
+    var HK = sc.hydK || { plate: 0.11, tubeR: 0.042, pumpHL: 0.13, pumpHW: 0.09 };
+    (sc.hyd || []).forEach(function (h, i) {
+      [1, -1].forEach(function (sg) { var c = [h.x + h.l[0] * h.offM * sg, h.y + h.l[1] * h.offM * sg]; P.poly(rect(c, h.t, h.l, -HK.plate, HK.plate, -HK.plate, HK.plate), true, 'HYD'); P.circle([c[0] * MM, c[1] * MM], HK.tubeR * MM, 'HYD'); });
+      var al = 0.5 * ((i % 3) - 1); P.text([(h.x + h.l[0] * (h.offM + 0.4) + h.t[0] * al) * MM, (h.y + h.l[1] * (h.offM + 0.4) + h.t[1] * al) * MM], h.id, 0, 'HYD', { rel: true, mid: true });
+    });
+    (sc.hydPump || []).forEach(function (pp) { P.poly(rect([pp.x, pp.y], pp.t, pp.l, -HK.pumpHL, HK.pumpHL, -HK.pumpHW, HK.pumpHW), true, 'HYD_IND'); P.text([pp.x * MM, (pp.y + HK.pumpHW + 0.12) * MM], 'Hand pump (indicative)', 0, 'HYD_IND', { rel: true, mid: true }); });
     // belt width dim at the inlet end (placed behind the inlet)
     var wa = L1[0], wb = R1[0], bk = fS.t;
     var up = { a: wb, b: wa }; var sgn0 = (-bk[0] * (-(wa[1] - wb[1])) + -bk[1] * (wa[0] - wb[0])) >= 0 ? 1 : -1;
@@ -150,6 +158,18 @@
     E.poly(top.map(function (p) { return [p[0], p[1] - fd * MM]; }), false, 'FRAME_IND');
     E.poly(top.map(function (p) { return [p[0], p[1] + 15 + sc.guideH * MM]; }), false, 'GUIDE_IND');
     sc.legs.forEach(function (g) { var x = sh.at(g.s) * MM, s = g.sec * MM; E.poly([[x - s, 0], [x + s, 0], [x + s, g.zb * MM], [x - s, g.zb * MM]], true, 'SUPPORT_IND'); });
+    (sc.hyd || []).forEach(function (h, i) {   // hydraulic stands (side): base plate, barrel, chrome rod, saddle, cross-beam
+      var x = sh.at(h.s) * MM, tr = HK.tubeR * MM, rr = HK.rodR * MM, Hh = h.heightM * MM, tt = h.tubeTopM * MM, rt = Hh - 16;
+      E.poly([[x - HK.plate * MM, 0], [x + HK.plate * MM, 0], [x + HK.plate * MM, 12], [x - HK.plate * MM, 12]], true, 'HYD');
+      E.poly([[x - tr, 12], [x + tr, 12], [x + tr, tt], [x - tr, tt]], true, 'HYD');
+      E.poly([[x - rr, tt], [x + rr, tt], [x + rr, rt], [x - rr, rt]], true, 'HYD');
+      E.poly([[x - 70, rt], [x + 70, rt], [x + 70, Hh], [x - 70, Hh]], true, 'HYD');
+      E.poly([[x - 50, Hh], [x + 50, Hh], [x + 50, Hh + 30], [x - 50, Hh + 30]], true, 'HYD_IND');
+      E.dim([x + tr + 60, 0], [x + tr + 60, Hh], -150 - 110 * (i % 2), h.id + ' height ' + Math.round(Hh) + ' mm', 'calc');
+      if (h.rodM > 0.02) E.dim([x - tr - 60, tt], [x - tr - 60, tt + h.rodM * MM], 150, h.id + ' rod out ' + Math.round(h.rodM * MM) + ' mm', 'ind');
+      E.text([x, Hh + 70], h.id, 0, 'HYD', { rel: true, mid: true });
+    });
+    (sc.hydPivots || []).forEach(function (pv) { var x = sh.at(pv.s) * MM; E.circle([x, pv.z * MM], 14, 'HYD'); E.poly([[x - 40, 0], [x + 40, 0], [x + 40, 10], [x - 40, 10]], true, 'HYD'); E.line([x - 8, 10], [x - 8, pv.z * MM - 14], 'HYD'); E.line([x + 8, 10], [x + 8, pv.z * MM - 14], 'HYD'); E.text([x, pv.z * MM + 60], 'Pivot S' + pv.seg, 0, 'HYD_IND', { rel: true, mid: true }); });
     var R = sc.rollerR * MM; [fS, fE].forEach(function (f, k) { E.circle([(k ? totalH : 0), f.p[2] * MM - 12 - R], R, 'DRIVE_IND'); });
     if (ph && ph.h) { var xs = Math.min(0.15 + ph.a / 2, totalH / MM / 2) * MM, zs = sts[0].p[2] * MM, w = ph.a * MM; E.poly([[xs - w / 2, zs], [xs + w / 2, zs], [xs + w / 2, zs + ph.h * MM], [xs - w / 2, zs + ph.h * MM]], true, 'PRODUCT'); }
 
@@ -197,6 +217,27 @@
       if (e.sizeEntered.wid) S.dim([lat - hwid, zc - hh], [lat + hwid, zc - hh], -60 - 60 * (i % 3), 'E' + e.n + ' W ' + Math.round(e.wid * MM), 'entered');
       if (e.sizeEntered.h) S.dim([lat + hwid, zc - hh], [lat + hwid, zc + hh], 60 + 60 * (i % 3), 'E' + e.n + ' H ' + Math.round(e.h * MM), 'entered');
     });
+    var h1 = (sc.hyd || [])[0];
+    if (h1) {   // typical section through the first hydraulic stand, drawn beside the end view
+      var cx = hwm + tk + 1300 + hwm + tk, bz = h1.beltZ * MM, Hh1 = h1.heightM * MM, tr1 = HK.tubeR * MM, rr1 = HK.rodR * MM, tt1 = h1.tubeTopM * MM, off1 = h1.offM * MM, pl1 = HK.plate * MM;
+      S.text([cx, bz + 320], 'SECTION THROUGH STAND ' + h1.id + ' (typical)', 0, 'HYD', { rel: true, mid: true });
+      S.line([cx - hwm - 600, 0], [cx + hwm + 1100, 0], 'FLOOR');
+      S.poly([[cx - hwm, bz - 12], [cx + hwm, bz - 12], [cx + hwm, bz], [cx - hwm, bz]], true, 'OUTLINE');
+      [1, -1].forEach(function (sg) {
+        S.poly([[cx + sg * hwm, bz - fd * MM], [cx + sg * (hwm + tk), bz - fd * MM], [cx + sg * (hwm + tk), bz + 15], [cx + sg * hwm, bz + 15]], true, 'FRAME_IND');
+        var lx = cx + sg * off1;
+        S.poly([[lx - pl1, 0], [lx + pl1, 0], [lx + pl1, 12], [lx - pl1, 12]], true, 'HYD');
+        S.poly([[lx - tr1, 12], [lx + tr1, 12], [lx + tr1, tt1], [lx - tr1, tt1]], true, 'HYD');
+        S.poly([[lx - rr1, tt1], [lx + rr1, tt1], [lx + rr1, Hh1 - 16], [lx - rr1, Hh1 - 16]], true, 'HYD');
+        S.poly([[lx - 55, Hh1 - 16], [lx + 55, Hh1 - 16], [lx + 55, Hh1], [lx - 55, Hh1]], true, 'HYD');
+      });
+      S.poly([[cx - off1 - 30, Hh1], [cx + off1 + 30, Hh1], [cx + off1 + 30, Hh1 + 30], [cx - off1 - 30, Hh1 + 30]], true, 'HYD_IND');
+      S.poly([[cx - off1 + tr1, tt1 * 0.45 - 12], [cx + off1 - tr1, tt1 * 0.45 - 12], [cx + off1 - tr1, tt1 * 0.45 + 12], [cx - off1 + tr1, tt1 * 0.45 + 12]], true, 'HYD_IND');
+      S.poly([[cx + off1 + 550 - 90, 0], [cx + off1 + 550 + 90, 0], [cx + off1 + 550 + 90, 200], [cx + off1 + 550 - 90, 200]], true, 'HYD_IND');
+      S.text([cx + off1 + 550, 260], 'Pump (indicative)', 0, 'HYD_IND', { rel: true, mid: true });
+      S.dim([cx + hwm + tk, 0], [cx + hwm + tk, Hh1], -420, h1.id + ' height ' + Math.round(Hh1) + ' mm', 'calc');
+      S.dim([cx - off1, Hh1 + 60], [cx + off1, Hh1 + 60], 120, h1.id + ' cylinder centres ' + Math.round(off1 * 2) + ' mm', 'ind');
+    }
     M.views.push(S); if (FV) M.views.push(FV);
 
     /* ---------- 3-D faces ---------- */
@@ -294,6 +335,12 @@
     });
     return { title: 'EQUIPMENT SCHEDULE (drive motor, sensors, other) - values as entered; * = indicative placeholder, not entered', head: ['Tag', 'Type', 'Name', 'Rating / spec (as entered)', 'Side', 'From inlet (mm, along route)', 'Height above belt top (mm)', 'L x W x H (mm)', 'Centre above floor (mm)', 'Note'], rows: rows };
   }
+  function hydSchedule(M) {
+    var rows = (M.sc.hyd || []).map(function (h) {
+      return [h.id, 'S' + h.seg + (h.decline ? ' decline' : ' incline'), mmS(h.s), mmS(h.heightM) + ' (calc.)', mmS(h.rodM) + ' *', h.strokeMm ? String(Math.round(h.strokeMm)) : 'not entered *', h.rating || 'not entered', String(h.count) + ' per segment'];
+    });
+    return { title: 'HYDRAULIC STAND SCHEDULE - height calculated from the route; * = placeholder / not entered. Cylinder, pump and capacity are NOT selected or sized by this tool', head: ['Tag', 'Segment', 'From inlet (mm, along route)', 'Stand height to frame (mm)', 'Rod out (mm)', 'Stroke (mm, as entered)', 'Cylinder / capacity (as entered)', 'Stands'], rows: rows };
+  }
   function segSchedule(M) {
     var det = (M.inp.path && M.inp.path.details) || [], rows = det.map(function (d, k) {
       return ['S' + (k + 1), d.type, mmS(d.length), d.type === 'curve' ? mmS(d.radius) : '-', d.type === 'curve' ? ang(d.angle) + ' ' + (d.direction === 'right' ? 'R' : 'L') : (d.type === 'incline' ? ang(Math.abs(d.angle)) : '-'), mmS(d.horizontal), d.type === 'incline' ? mmS(Math.abs(d.rise)) : '-'];
@@ -320,32 +367,32 @@
     var d = new DXF(), L = layout2D(d, M), h = Math.max(40, L.hS), y = L.bottom - 4 * h;
     var mtitle = (M.meta.title || 'Conveyor general arrangement');
     // tables
-    var yy = dxfTable(d, 0, y, equipSchedule(M), h); yy = dxfTable(d, 0, yy - 4 * h, segSchedule(M), h);
+    var yy = dxfTable(d, 0, y, equipSchedule(M), h); yy = dxfTable(d, 0, yy - 4 * h, segSchedule(M), h); if ((M.sc.hyd || []).length) yy = dxfTable(d, 0, yy - 4 * h, hydSchedule(M), h);
     // title block
     var tb = yy - 5 * h, tx = 0, tw = 90 * h, lines = ['ULTRAPLAST CHAINBELTS PVT. LTD.', mtitle + (M.meta.ref ? '   Ref: ' + M.meta.ref : ''), 'Date ' + (M.meta.date || '') + '    Units: mm    Scale: 1:1 (full size, model space)', 'INDICATIVE drawing - for engineering review, not for manufacture.', 'Contents: plan, floor layout, side elevation, end view, equipment + route schedules, 3-D model (to the right).', 'Dimension colours: black = entered, red = calculated, grey = indicative.'];
     d.line([tx, tb + 2 * h, 0], [tx + tw, tb + 2 * h, 0], 'TITLE'); d.line([tx + tw, tb + 2 * h, 0], [tx + tw, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx + tw, tb - lines.length * h * 1.7, 0], [tx, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx, tb - lines.length * h * 1.7, 0], [tx, tb + 2 * h, 0], 'TITLE');
     lines.forEach(function (t, i) { d.text([tx + h, tb - i * h * 1.7 + h * 0.2], t, i === 0 ? h * 1.2 : h * 0.95, i === 3 ? 'DIM_CALC' : 'TITLE'); });
     var bottom = tb - lines.length * h * 1.7 - 2 * h;
     // 3-D model placed to the right of the 2-D layout
-    var sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D' };
+    var sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D', hyd: 'HYD3D' };
     var lo = [1e18, 1e18, 1e18], hi = [-1e18, -1e18, -1e18], src = [1e18, 1e18, 1e18];
     sc.polys.forEach(function (q) { if (q.tag === 'prod') return; q.p.forEach(function (p) { for (var i = 0; i < 3; i++) src[i] = Math.min(src[i], p[i] * MM); }); });
     var ox = L.right + 6000 - src[0], oy = L.top - 1000 - (function () { var m = -1e18; sc.polys.forEach(function (q) { if (q.tag !== 'prod') q.p.forEach(function (p) { m = Math.max(m, p[1] * MM); }); }); return m; })();
     function P3(p) { var q = [p[0] * MM + ox, p[1] * MM + oy, p[2] * MM]; for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return q; }
-    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P3), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' ? nearestAci(q.c) : 0)); });
+    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P3), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' || q.tag === 'hyd' ? nearestAci(q.c) : 0)); });
     d.poly3(sc.stations.map(function (s) { return P3(s.p); }), 'CENTRE');
     var h3 = Math.max(60, Math.round(Math.max(hi[0] - lo[0], hi[1] - lo[1]) / 120 / 10) * 10);
     sc.dims.forEach(function (m) { var a = P3(m.a), b = P3(m.b); d.line(a, b, DIMLAYER[m.kind] || 'DIM_CALC'); var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], dx = b[0] - a[0], dy = b[1] - a[1], rot = Math.atan2(dy, dx) * 180 / Math.PI; if (rot > 90) rot -= 180; if (rot <= -90) rot += 180; d.g(0, 'TEXT'); d.g(8, d.use(DIMLAYER[m.kind] || 'DIM_CALC')); d.g(10, f(mid[0])); d.g(20, f(mid[1])); d.g(30, f(mid[2])); d.g(40, f(h3)); d.g(1, ascii(m.text)); if (Math.abs(dx) + Math.abs(dy) > 1e-6) d.g(50, f(rot)); });
-    sc.tags.forEach(function (t) { if (!/^E\d/.test(t.text)) return; var p = P3(t.p); d.g(0, 'TEXT'); d.g(8, d.use('EQUIP3D')); d.g(10, f(p[0])); d.g(20, f(p[1])); d.g(30, f(p[2])); d.g(40, f(h3)); d.g(1, ascii(t.text)); });
+    sc.tags.forEach(function (t) { if (!/^[EH]\d/.test(t.text)) return; var p = P3(t.p); d.g(0, 'TEXT'); d.g(8, d.use(/^H/.test(t.text) ? 'HYD3D' : 'EQUIP3D')); d.g(10, f(p[0])); d.g(20, f(p[1])); d.g(30, f(p[2])); d.g(40, f(h3)); d.g(1, ascii(t.text)); });
     d.text([lo[0], hi[1] + h3 * 3], '3-D MODEL (full size, mm) - ' + mtitle, h3 * 1.4, 'TITLE');
     return d.finish([[Math.min(-L.gap, lo[0]), Math.min(bottom, lo[1]), Math.min(0, lo[2])], [Math.max(L.right, hi[0]), Math.max(L.top, hi[1]), Math.max(0, hi[2])]]);
   }
   /** 3-D DXF: 3DFACE model (layers by part), centre-line, belt-colour on BELT3D, plus dimension annotations. */
   function toDXF3D(M, opt) {
-    opt = opt || {}; var d = new DXF(), sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D' };
+    opt = opt || {}; var d = new DXF(), sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D', hyd: 'HYD3D' };
     var lo = [1e18, 1e18, 1e18], hi = [-1e18, -1e18, -1e18];
     function P(p) { var q = [p[0] * MM, p[1] * MM, p[2] * MM]; for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return q; }
-    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' ? nearestAci(q.c) : 0)); });
+    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' || q.tag === 'hyd' ? nearestAci(q.c) : 0)); });
     d.poly3(sc.stations.map(function (s) { return P(s.p); }), 'CENTRE');
     var h = Math.max(60, Math.round(Math.max(hi[0] - lo[0], hi[1] - lo[1]) / 120 / 10) * 10);
     sc.dims.forEach(function (m) { var a = P(m.a), b = P(m.b); d.line(a, b, DIMLAYER[m.kind] || 'DIM_CALC'); var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], dx = b[0] - a[0], dy = b[1] - a[1], rot = Math.atan2(dy, dx) * 180 / Math.PI; if (rot > 90) rot -= 180; if (rot <= -90) rot += 180; d.g(0, 'TEXT'); d.g(8, d.use(DIMLAYER[m.kind] || 'DIM_CALC')); d.g(10, f(mid[0])); d.g(20, f(mid[1])); d.g(30, f(mid[2])); d.g(40, f(h)); d.g(1, ascii(m.text)); if (Math.abs(dx) + Math.abs(dy) > 1e-6) d.g(50, f(rot)); });
@@ -425,6 +472,7 @@
     }
     var y = table(equipSchedule(M), 38, [12, 32, 24, 52, 16, 44, 42, 38, 36, 70]);
     y = table(segSchedule(M), y, [14, 28, 34, 34, 34, 44, 34]);
+    if ((M.sc.hyd || []).length) y = table(hydSchedule(M), y, [14, 30, 46, 46, 28, 46, 80, 30]);
     var notes = ['INDICATIVE drawing - for engineering review, not for manufacture.', 'Dimension colours: black = entered, red = calculated, grey = indicative (frame, legs, placeholder sizes marked *).', 'Dimensions in the DXF are lines and text, not associative AutoCAD DIMENSION objects; they were checked against the geometry they describe.', 'Motor, sensor ratings are shown exactly as typed. This tool does not select or size any motor, sensor, belt, chain or structure.'].concat(M.notes.filter(function (n) { return !/INDICATIVE|associative/.test(n); }));
     s += '<text x="14" y="' + y + '" font-size="3.8" font-weight="bold">NOTES</text>';
     notes.forEach(function (t, i) { s += '<text x="14" y="' + (y + 6 + i * 5) + '" font-size="2.9"' + (i === 0 ? ' fill="#a33" font-weight="bold"' : '') + '>' + esc(t) + '</text>'; });
@@ -438,5 +486,5 @@
     return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 614" width="420mm" height="614mm" font-family="Arial,Helvetica,sans-serif"><g>' + inner + '</g>' + sheet2(M, 317) + '</svg>';
   }
 
-  return { build: build, toDXF2D: toDXF2D, toDXF3D: toDXF3D, toDXFAll: toDXFAll, toSVGSheet2: toSVGSheet2, toSVGAll: toSVGAll, equipSchedule: equipSchedule, segSchedule: segSchedule, toSVG: toSVG, nearestAci: nearestAci, LAYERS: LAYERS, ascii: ascii };
+  return { build: build, toDXF2D: toDXF2D, toDXF3D: toDXF3D, toDXFAll: toDXFAll, toSVGSheet2: toSVGSheet2, toSVGAll: toSVGAll, equipSchedule: equipSchedule, hydSchedule: hydSchedule, segSchedule: segSchedule, toSVG: toSVG, nearestAci: nearestAci, LAYERS: LAYERS, ascii: ascii };
 });

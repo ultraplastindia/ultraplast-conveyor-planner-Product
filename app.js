@@ -31,7 +31,7 @@
         beltColor: '', productColor: '', friction: '', washdown: 'none', guarding: 'basic', guideRails: false, pitch: '', sprocketTeeth: '', pulleyDia: '', centreDistance: '', drives: ''
       },
       conditions: ['dry'], obstacles: [], segments: [], equipment: [], contact: { name: '', company: '', email: '', mobile: '+91 ', city: '', state: '', timeline: '', budget: '', comments: '', consent: false },
-      result: null, enquiry: { status: 'idle', message: '' }, suggested: {}, qfNote: ''
+      result: null, enquiry: { status: 'idle', message: '' }, suggested: {}, qfNote: '', hydDelta: {}
     };
   }
   var state = fresh();
@@ -107,7 +107,7 @@
     S: [['straight'], ['curve', 'left'], ['straight'], ['curve', 'right'], ['straight']], inclined: [['straight'], ['incline'], ['straight']],
     curved: [['straight'], ['curve', 'left'], ['straight']], multi: [['straight']], custom: [['straight']]
   };
-  function newSeg(type, dir) { return { type: type, length: '', angle: type === 'curve' ? '90' : '', radius: '', direction: dir || 'left', horizontal: '', rise: '', inclineAngle: '' }; }
+  function newSeg(type, dir) { return { type: type, length: '', angle: type === 'curve' ? '90' : '', radius: '', direction: dir || 'left', horizontal: '', rise: '', inclineAngle: '', hyd: '', hydCount: '1', hydStroke: '', hydRating: '' }; }
 
   /* ---------------------------------------------------------------- Quick fill: industry + weight -> suggested product details */
   var KG = { g: 0.001, kg: 1, oz: 0.0283495, lb: 0.45359237 };
@@ -278,8 +278,17 @@
       if (s.type === 'straight') inputs = ph('length', 'Length', 'm');
       else if (s.type === 'curve') inputs = ph('angle', 'Angle', 'deg') + ph('radius', 'Centre-line radius', 'mm') + '<label class="mini"><span>Turn</span><select data-seg="direction" data-i="' + i + '"><option value="left"' + (s.direction === 'left' ? ' selected' : '') + '>Left</option><option value="right"' + (s.direction === 'right' ? ' selected' : '') + '>Right</option></select></label>';
       else inputs = ph('horizontal', 'Horizontal run', 'm') + ph('rise', 'Rise (− = decline)', 'mm') + ph('inclineAngle', 'or angle', 'deg');
+      var hydBlock = '';
+      if (s.type === 'incline') {
+        var on = s.hyd === '1';
+        hydBlock = '<div class="hydrow"><label class="chk hydchk"><input type="checkbox" data-hyd="hyd" data-i="' + i + '"' + (on ? ' checked' : '') + '> <b>Support with hydraulic stand(s)</b> <small>(height-adjustable)</small></label>' +
+          (on ? '<label class="mini"><span>Number of stands</span><select data-hyd="hydCount" data-i="' + i + '">' + ['1', '2', '3'].map(function (n) { return '<option value="' + n + '"' + (String(s.hydCount || '1') === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
+            '<label class="mini"><span>Adjustable stroke (' + ul('mm') + ') - optional</span><input type="text" inputmode="decimal" data-hyd="hydStroke" data-i="' + i + '" value="' + esc(s.hydStroke) + '" placeholder="leave blank if unknown"></label>' +
+            '<label class="mini"><span>Cylinder / capacity (as you know it) - optional</span><input type="text" data-hyd="hydRating" data-i="' + i + '" value="' + esc(s.hydRating) + '" maxlength="60" placeholder="e.g. 2 t, as per your standard"></label>' +
+            '<span class="note hydnote">Drawn as a twin-cylinder stand with a hand pump. Ultraplast engineering selects and sizes the cylinders; nothing is sized here.</span>' : '') + '</div>';
+      }
       return '<div class="seg" role="group" aria-label="Segment ' + (i + 1) + '"><b class="segn">' + (i + 1) + '</b><label class="mini"><span>Type</span><select data-seg="type" data-i="' + i + '"><option value="straight"' + (s.type === 'straight' ? ' selected' : '') + '>Straight</option><option value="curve"' + (s.type === 'curve' ? ' selected' : '') + '>Curve</option><option value="incline"' + (s.type === 'incline' ? ' selected' : '') + '>Incline / decline</option></select></label>' + inputs +
-        '<span class="segerr err" id="e_segment' + i + '" role="alert"></span><button type="button" class="btn ghost sm" data-del-seg="' + i + '" aria-label="Remove segment ' + (i + 1) + '">✕</button></div>';
+        '<span class="segerr err" id="e_segment' + i + '" role="alert"></span><button type="button" class="btn ghost sm" data-del-seg="' + i + '" aria-label="Remove segment ' + (i + 1) + '">✕</button>' + hydBlock + '</div>';
     }).join('');
   }
 
@@ -346,11 +355,17 @@
       ['Floor space (optional)', res.floor.area !== null], ['Product', !!prodOk], ['Throughput / speed', !!(inp.speed || res.throughput.requiredSpeed)],
       ['Route', !!(res.path && res.path.complete)], ['Conveyor running', !plan.why]
     ];
-    var host = $('#liveSchem');
+    var host = $('#liveSchem'), prevHyd = $('#hydBoxLive') && $('#hydBoxLive').firstChild;
     host.innerHTML = '<ul class="build" aria-label="Build progress">' + done.map(function (d) { return '<li class="' + (d[1] ? 'on' : '') + '"><span aria-hidden="true">' + (d[1] ? '✓' : '○') + '</span> ' + d[0] + '</li>'; }).join('') + '</ul>' +
-      (state.step === 2 ? productPreview(inp) : '') + '<div id="live3d"></div><p class="note legend3d">3D view: black dimensions are entered by you, red are calculated, grey are indicative (frame, supports, drive).</p>';
+      (state.step === 2 ? productPreview(inp) : '') + '<div id="live3d"></div><div id="hydBoxLive"></div><p class="note legend3d">3D view: black dimensions are entered by you, red are calculated, grey are indicative (frame, supports, drive).</p>';
     try { liveSim = V3.create($('#live3d'), v3dOpts(inp, res, plan, { compact: true, startTime: liveTime, view: liveView })); }
     catch (e) { $('#live3d').innerHTML = '<p class="err">3D preview unavailable: ' + esc(e.message) + '</p>'; }
+    (function () {   // hydraulic raise / lower control: keep the same slider element while it is being dragged
+      var box = $('#hydBoxLive'); if (!box) return; var html = hydPanelHtml(inp, res);
+      if (!html) return;
+      var sig = hydSig(inp, res);
+      if (prevHyd && prevHyd.getAttribute && prevHyd.getAttribute('data-sig') === sig) { box.appendChild(prevHyd); hydUpdateReads(inp, res); } else box.innerHTML = html;
+    })();
     var rows = [];
     if (res.floor.area !== null) rows.push(['Floor area', num2(res.floor.area) + ' m²', 'calc']);
     if (res.path) rows.push(['Route path length' + (res.path.complete ? '' : ' (partial)'), fmtLen(res.path.total), res.path.complete ? 'calc' : 'review']);
@@ -422,6 +437,7 @@
       '<li><b>What to do now:</b> look at the 3D model and the drawing below, download the PDF, then send the enquiry. Ultraplast will confirm everything. This is a first estimate, not a final design or a price.</li></ul></section>';
   }
   function renderResults() {
+    state.hydDelta = {};
     var rw = raw(), inp = C.normalize(rw), res;
     var wrap = $('#resultsBody');
     try { res = C.analyse(inp, P); } catch (e) { wrap.innerHTML = '<div class="banner bad" role="alert"><b>Calculation error.</b> ' + esc(e.message) + ' Please go back, check your inputs, and try again.</div>'; return; }
@@ -444,7 +460,7 @@
       (rec.alternatives.length ? '<h4>Alternatives to discuss</h4><p>' + rec.alternatives.map(function (a) { return esc(cats[a].name); }).join(' &middot; ') + '</p>' : '') + '</section>');
     h.push('<section class="card" id="simCard"><h3>Your conveyor in 3D</h3><p class="note">Built from your answers: route, floor (if given), curve radii, inclines, heights, belt width, product size and spacing. Drag to turn it, scroll or pinch to zoom, Shift+drag to move. Use Top, Front and Side for flat views.</p>' +
       '<div class="tabs" role="tablist" aria-label="Conveyor views"><button type="button" role="tab" class="tab" data-tab="3d" aria-selected="true">3D model</button><button type="button" role="tab" class="tab" data-tab="plan" aria-selected="false">Plan view (2D) and side profile</button></div>' +
-      '<div id="v3dMsg"></div><div id="v3dHost"></div><div id="simHost" hidden></div></section>');
+      '<div id="v3dMsg"></div><div id="hydBox3"></div><div id="v3dHost"></div><div id="simHost" hidden></div></section>');
     h.push(cadCard(inp, res));
     h.push(scheduleHtml(inp, res));
     if (costEnabled()) h.push('<section class="card" id="costCard"></section>');
@@ -498,7 +514,7 @@
     h.push(enquiryHtml());
     if (sim) { sim.destroy(); sim = null; } if (view3) { view3.destroy(); view3 = null; } planStarted = false;
     wrap.innerHTML = h.join('');
-    start3d(inp, res); if (costEnabled()) initCost(inp, res);
+    start3d(inp, res); fillHydPanels(); if (costEnabled()) initCost(inp, res);
     updateEnquiryStatus();
   }
 
@@ -556,15 +572,105 @@
       '<p class="note">DXF files are full size in millimetres. Dimensions are lines and text (checked against the geometry they describe), not editable AutoCAD dimension objects. Open the SVG in a browser and use Print &rarr; Save as PDF for a PDF. Engineering review required before any manufacture.</p>' +
       '<details class="mfg"><summary><b>Can this drawing be used for manufacturing? No.</b></summary><p>It is <b>indicative, for engineering review, not for manufacture</b>. Frame, guides, legs, rollers and motor are placeholder sizes; there is no motor, tension or structural engineering, no bill of materials, and dimensions are lines and text only. It is a correct starting point for Ultraplast engineers, who must supply the real standard parts and calculations and approve each drawing before anything is built from it.</p></details></section>';
   }
+  /* ---- hydraulic stand: raise / lower the incline in the running 3D view (a what-if; the entered values and the drawings stay as entered until "Keep this height") ---- */
+  var hydTimer = null;
+  function hydList(inp, res) {
+    var out = [], k = 0, segs = C.segmentsFromInputs(inp);
+    if (!res || !res.path) return out;
+    res.path.details.forEach(function (d) {
+      if (d.type !== 'incline' || !d.hyd) return;
+      var rangeMm = d.hydStrokeMm ? d.hydStrokeMm / 2 : 150;
+      out.push({ k: k, seg: d.index + 1, d: d, rangeMm: rangeMm, strokeMm: d.hydStrokeMm, count: d.hydCount, rating: d.hydRating });
+      k++;
+    });
+    return out;
+  }
+  function hydAdjusted(inp, res) {
+    var list = hydList(inp, res), any = list.some(function (h) { return state.hydDelta[h.k]; });
+    if (!any) return { inp: inp, res: res };
+    var segs = (inp.segments || []).map(function (x) { var c = {}; for (var q in x) c[q] = x[q]; return c; });
+    list.forEach(function (h) {
+      var dl = state.hydDelta[h.k] || 0; if (!dl) return;
+      var sg = segs[h.d.index]; if (!sg) return;
+      sg.horizontal = h.d.horizontal; sg.riseM = h.d.rise + dl / 1000; sg.rise = sg.riseM * 1000; sg.inclineAngle = null;
+    });
+    var inp2 = {}; for (var q in inp) inp2[q] = inp[q]; inp2.segments = segs;
+    var res2; try { res2 = C.analyse(inp2, P); } catch (e) { return { inp: inp, res: res }; }
+    return { inp: inp2, res: res2 };
+  }
+  function hydPanelHtml(inp, res) {
+    var list = hydList(inp, res); if (!list.length) return '';
+    var ad = hydAdjusted(inp, res), l2 = hydList(ad.inp, ad.res);
+    return '<div class="hydpanel" data-sig="' + hydSig(inp, res) + '" role="group" aria-label="Hydraulic stand control"><h4>Hydraulic stand - raise / lower</h4>' + list.map(function (h, n) {
+      var dl = state.hydDelta[h.k] || 0, cur = l2[n] ? l2[n].d : h.d, entered = h.d;
+      return '<div class="hydctl"><label for="hydlift' + h.k + '"><b>Segment ' + h.seg + '</b> (' + (entered.rise < 0 ? 'decline' : 'incline') + ', ' + h.count + ' stand' + (h.count > 1 ? 's' : '') + ')</label>' +
+        '<div class="hydbtns"><button type="button" class="btn sm" data-hydstep="' + h.k + '" data-dir="-1" aria-label="Lower">&#9660; Lower</button>' +
+        '<input type="range" id="hydlift' + h.k + '" data-hydlift="' + h.k + '" min="' + (-h.rangeMm) + '" max="' + h.rangeMm + '" step="5" value="' + dl + '" aria-label="Height change of segment ' + h.seg + ' in millimetres">' +
+        '<button type="button" class="btn sm" data-hydstep="' + h.k + '" data-dir="1" aria-label="Raise">&#9650; Raise</button></div>' +
+        '<p class="hydread" data-hydread="' + h.k + '" role="status">' + hydReadout(h, cur, entered, dl) + '</p>' +
+        '<div class="hydbtns"><button type="button" class="btn ghost sm" data-hydreset="' + h.k + '">Reset to entered height</button><button type="button" class="btn sm primary" data-hydkeep="' + h.k + '"' + (dl ? '' : ' disabled') + '>Keep this height (write to the route)</button></div></div>';
+    }).join('') + '<p class="note">Try raising or lowering the section to see the angle and the stand extend or retract while the belt runs. The travel range is &plusmn;half of the stroke you entered' + (list.some(function (h) { return !h.strokeMm; }) ? ' (&plusmn;150 mm placeholder where no stroke was entered)' : '') + '. This is a what-if only: it does not check cylinder capacity, stability or the frame. <b>Keep this height</b> copies it into the route so the results and drawings use it. Engineering review required.</p></div>';
+  }
+  function hydSig(inp, res) { return hydList(inp, res).map(function (h) { return h.k + ':' + h.seg + ':' + h.count + ':' + h.rangeMm + ':' + h.rating + ':' + h.d.rise; }).join('|'); }
+  function hydUpdateReads(inp, res) {
+    var list = hydList(inp, res), ad = hydAdjusted(inp, res), l2 = hydList(ad.inp, ad.res);
+    list.forEach(function (h, n) { document.querySelectorAll('[data-hydread="' + h.k + '"]').forEach(function (el) { el.innerHTML = hydReadout(h, l2[n] ? l2[n].d : h.d, h.d, state.hydDelta[h.k] || 0); }); });
+  }
+  function hydReadout(h, cur, entered, dl) {
+    return 'Rise ' + esc(fmtMm(cur.rise * 1000)) + ' (entered ' + esc(fmtMm(entered.rise * 1000)) + (dl ? ', ' + (dl > 0 ? '+' : '') + esc(fmtMm(dl)) : '') + ') &middot; angle ' + num2(Math.abs(cur.angle), 1) + '&deg;' + (h.strokeMm ? ' &middot; stroke ' + esc(fmtMm(h.strokeMm)) : ' &middot; stroke not entered');
+  }
+  function fillHydPanels() {
+    var r = state.step === 5 ? state.result : null, inp, res;
+    if (r) { inp = r.inp; res = r.res; } else { try { inp = C.normalize(raw()); res = C.analyse(inp, P); } catch (e) { return; } }
+    var html = hydPanelHtml(inp, res), a = $('#hydBox3'), b = $('#hydBoxLive');
+    if (a) a.innerHTML = html; if (b) b.innerHTML = html;
+  }
+  function hydRefresh3d() {
+    clearTimeout(hydTimer);
+    hydTimer = setTimeout(function () {
+      if (state.step === 5 && view3 && state.result) {
+        var st = view3.state(), vw = view3.view(); view3.destroy(); view3 = null;
+        start3d(state.result.inp, state.result.res, { startTime: st.time, view: vw }); if (view3 && !st.playing) view3.pause();
+      } else if (state.step !== 5) doLive();
+    }, 90);
+  }
+  function hydSlide(t) {
+    var k = +t.getAttribute('data-hydlift'); state.hydDelta[k] = +t.value;
+    var r = state.step === 5 ? state.result : null, inp, res; if (r) { inp = r.inp; res = r.res; } else { inp = C.normalize(raw()); res = C.analyse(inp, P); }
+    var list = hydList(inp, res), ad = hydAdjusted(inp, res), l2 = hydList(ad.inp, ad.res), h = list[k], c = l2[k];
+    document.querySelectorAll('[data-hydread="' + k + '"]').forEach(function (el) { el.innerHTML = hydReadout(h, c ? c.d : h.d, h.d, state.hydDelta[k]); });
+    document.querySelectorAll('[data-hydkeep="' + k + '"]').forEach(function (el) { el.disabled = !state.hydDelta[k]; });
+    document.querySelectorAll('[data-hydlift="' + k + '"]').forEach(function (el) { if (el !== t) el.value = t.value; });
+    hydRefresh3d();
+  }
+  function hydClick(t) {
+    var st = t.getAttribute('data-hydstep'), rs = t.getAttribute('data-hydreset'), kp = t.getAttribute('data-hydkeep');
+    if (st !== null) { var el = document.querySelector('[data-hydlift="' + st + '"]'); if (!el) return true; var nv = Math.max(+el.min, Math.min(+el.max, (+el.value) + 25 * (+t.getAttribute('data-dir')))); el.value = nv; hydSlide(el); return true; }
+    if (rs !== null) { delete state.hydDelta[rs]; fillHydPanels(); hydRefresh3d(); return true; }
+    if (kp !== null) {
+      var r = state.step === 5 ? state.result : null, inp, res; if (r) { inp = r.inp; res = r.res; } else { inp = C.normalize(raw()); res = C.analyse(inp, P); }
+      var list = hydList(inp, res), h = list[+kp]; if (!h) return true;
+      var ord = -1, row = null; state.segments.forEach(function (sg) { if (sg.type === 'incline' && sg.hyd === '1') { ord++; if (ord === +kp) row = sg; } });
+      if (row) {
+        var mm = Math.round(h.d.rise * 1000 + (state.hydDelta[+kp] || 0));
+        row.rise = convertStr(String(mm), 'mm', 'metric', state.unitSystem); row.inclineAngle = ''; if (!row.horizontal) row.horizontal = convertStr(String(h.d.horizontal), 'm', 'metric', state.unitSystem);
+        delete state.hydDelta[+kp]; state.dirty = true; toast('Height kept: the route now uses ' + fmtMm(mm) + ' rise for segment ' + h.seg + '.');
+        if (state.step === 5) render(false); else { var sb = $('#segBox'); if (sb) sb.innerHTML = segmentsHtml(); live(); }
+      }
+      return true;
+    }
+    return false;
+  }
   function v3dOpts(inp, res, plan, extra) {
+    var ad = hydAdjusted(inp, res); if (ad.res !== res) { inp = ad.inp; res = ad.res; plan = simPlan(inp, res); }
     var t = res.throughput, o = { scene: v3dScene(inp, res, plan, !(extra && extra.compact)), speedMPerMin: plan.speed, pitchMm: t.productPitchMm, lanes: t.lanes, behaviour: behaviourOf(inp, res), productRgb: V3.hexToRgb(inp.productColor) };
     for (var k in extra) o[k] = extra[k]; return o;
   }
-  function start3d(inp, res) {
+  function start3d(inp, res, extra) {
     var host = $('#v3dHost'); if (!host) return;
     var plan = simPlan(inp, res);
     if (plan.why) $('#v3dMsg').innerHTML = '<p class="banner warn">' + esc(plan.why) + '</p>';
-    try { view3 = V3.create(host, v3dOpts(inp, res, plan, {})); }
+    try { view3 = V3.create(host, v3dOpts(inp, res, plan, extra || {})); }
     catch (e) { host.innerHTML = ''; $('#v3dMsg').innerHTML = '<p class="banner warn">The 3D view could not start in this browser (' + esc(e.message) + '). The 2D plan view is shown instead.</p>'; selectTab('plan'); }
   }
   function startPlan(inp, res) {
@@ -579,7 +685,7 @@
     var tabs = document.querySelectorAll('#simCard .tab'), i;
     for (i = 0; i < tabs.length; i++) tabs[i].setAttribute('aria-selected', tabs[i].getAttribute('data-tab') === name ? 'true' : 'false');
     var h3 = $('#v3dHost'), hp = $('#simHost'), msg = $('#v3dMsg'); if (!h3 || !hp) return;
-    h3.hidden = name !== '3d'; msg.hidden = name !== '3d'; hp.hidden = name !== 'plan';
+    h3.hidden = name !== '3d'; msg.hidden = name !== '3d'; var hb3 = $('#hydBox3'); if (hb3) hb3.hidden = name !== '3d'; hp.hidden = name !== 'plan';
     var r = state.result;
     if (name === 'plan') { if (view3) view3.pause(); if (!planStarted && r) startPlan(r.inp, r.res); else if (sim) sim.play(); }
     else { if (sim) sim.pause(); if (view3) { view3.render(); view3.play(); } }
@@ -874,6 +980,8 @@
     if (n && t.type !== 'radio') { state.values[n] = t.type === 'checkbox' ? t.checked : t.value; if (state.suggested[n]) { delete state.suggested[n]; var bd = t.closest('.field') && t.closest('.field').querySelector('.badge.sug'); if (bd) { bd.className = 'badge opt'; bd.textContent = 'Edited'; } } live(); if (state.step === 4) updateHoriz(); refreshErrors(); }
     var os = t.getAttribute('data-obs'); if (os) { state.obstacles[+t.getAttribute('data-i')][os] = t.value; live(); }
     var eq = t.getAttribute('data-eq'); if (eq && eq !== 'type' && state.equipment[+t.getAttribute('data-i')]) { state.equipment[+t.getAttribute('data-i')][eq] = t.value; live(); }
+    var hy = t.getAttribute('data-hyd'); if (hy && t.type !== 'checkbox' && t.tagName !== 'SELECT' && state.segments[+t.getAttribute('data-i')]) { state.segments[+t.getAttribute('data-i')][hy] = t.value; live(); }
+    if (t.getAttribute('data-hydlift') !== null) { hydSlide(t); return; }
     var sg = t.getAttribute('data-seg'); if (sg && sg !== 'type') { state.segments[+t.getAttribute('data-i')][sg] = t.value; live(); updateHoriz(); }
     if (t.hasAttribute('data-cond')) { var c = t.getAttribute('data-cond'), i = state.conditions.indexOf(c); if (t.checked && i < 0) state.conditions.push(c); if (!t.checked && i >= 0) state.conditions.splice(i, 1); }
   }
@@ -884,6 +992,11 @@
     if (n === 'weight' || n === 'weightUnit') autoFromWeight();
     if (t.id === 'qfProduct') { var pp = (P.presets || []).filter(function (x) { return x.id === t.value; })[0]; if (pp) applyPreset(pp, true); return; }
     if (t.getAttribute('data-eq') === 'type') { var qi = +t.getAttribute('data-i'); if (state.equipment[qi]) { state.equipment[qi].type = t.value; $('#equipBox').innerHTML = equipmentHtml(); live(); } return; }
+    var hc = t.getAttribute('data-hyd'); if (hc && state.segments[+t.getAttribute('data-i')]) {
+      var sgi = state.segments[+t.getAttribute('data-i')];
+      if (t.type === 'checkbox') { sgi.hyd = t.checked ? '1' : ''; if (!t.checked) state.hydDelta = {}; $('#segBox').innerHTML = segmentsHtml(); } else sgi[hc] = t.value;
+      live(); return;
+    }
     if (t.getAttribute('data-seg') === 'type') { var s = state.segments[+t.getAttribute('data-i')], nt = newSeg(t.value, s.direction); state.segments[+t.getAttribute('data-i')] = nt; $('#segBox').innerHTML = segmentsHtml(); live(); updateHoriz(); }
     if (t.id === 'advToggle2') { state.advanced = t.checked; var b = $('.adv-box'); if (b) b.hidden = !state.advanced; $('#advToggle').checked = state.advanced; }
     if (t.hasAttribute('data-cond')) onInput(e);
@@ -913,6 +1026,7 @@
     var d = t.getAttribute('data-del-obs'); if (d !== null) { state.obstacles.splice(+d, 1); $('#obsBox').innerHTML = obstaclesHtml(); live(); }
     var as = t.getAttribute('data-add-seg'); if (as) { state.segments.push(newSeg(as)); $('#segBox').innerHTML = segmentsHtml(); live(); updateHoriz(); }
     var ds = t.getAttribute('data-del-seg'); if (ds !== null) { state.segments.splice(+ds, 1); $('#segBox').innerHTML = segmentsHtml(); live(); updateHoriz(); }
+    if (hydClick(t)) return;
     if (t.id === 'btnPdf') doPdf(); if (t.id === 'btnJson') doJson(); if (t.id === 'btnPrint') window.print();
     if (t.id === 'btnMail') onMail(); if (t.id === 'btnWa') onWa();
     if (t.id === 'btnNew') reset(true);

@@ -56,7 +56,7 @@
   /* Drive and sensors the customer places on the conveyor (all optional; sizes left blank are drawn as INDICATIVE placeholders). */
   var EQUIP_TYPES = { motor: 'Drive motor', photoeye: 'Photo-eye sensor', proximity: 'Proximity sensor', limit: 'Limit switch', encoder: 'Encoder', camera: 'Camera / vision', panel: 'Control panel / junction box', other: 'Other equipment' };
   var EQUIP_KINDS = { posMm: 'mm', mountMm: 'mm', lenMm: 'mm', widMm: 'mm', bodyHMm: 'mm' };
-  var SEGMENT_KINDS = { length: 'm', angle: 'deg', radius: 'mm', horizontal: 'm', rise: 'mm', inclineAngle: 'deg' };
+  var SEGMENT_KINDS = { length: 'm', angle: 'deg', radius: 'mm', horizontal: 'm', rise: 'mm', inclineAngle: 'deg', hydStroke: 'mm' };
 
   function parseNum(v) {
     if (v === null || v === undefined) return null;
@@ -137,9 +137,13 @@
       for (var kk in SEGMENT_KINDS) r[kk] = toMetric(SEGMENT_KINDS[kk], parseNum(s[kk]), sys);
       r.radiusM = r.radius === null || isNaN(r.radius) ? r.radius : r.radius / 1000;      // F3 uses metres
       r.riseM = r.rise === null || isNaN(r.rise) ? r.rise : r.rise / 1000;
+      // Hydraulic stand (incline / decline segments only). Customer wording is kept as typed; the tool never sizes a cylinder.
+      r.hyd = r.type === 'incline' && (s.hyd === true || s.hyd === '1' || s.hyd === 1 || s.hyd === 'true');
+      var hc = parseInt(s.hydCount, 10); r.hydCount = r.hyd ? (hc >= 1 && hc <= 3 ? hc : 1) : 0;
+      r.hydRating = r.hyd ? String(s.hydRating || '').trim() : '';
       return r;
     }).filter(function (s) {
-      return !(s.length === null && s.angle === null && s.radius === null && s.horizontal === null && s.rise === null && s.inclineAngle === null);
+      return !(s.length === null && s.angle === null && s.radius === null && s.horizontal === null && s.rise === null && s.inclineAngle === null && !s.hyd);
     });
     inp.conditions = Array.isArray(raw.conditions) ? raw.conditions.slice() : [];
     inp.advanced = !!raw.advanced;
@@ -224,6 +228,7 @@
       if (s.type === 'incline') {
         if (s.horizontal !== null && !isNaN(s.horizontal) && s.horizontal <= 0) err('segment' + i, tag + 'horizontal run must be greater than zero.', 4);
         if (s.inclineAngle !== null && !isNaN(s.inclineAngle) && Math.abs(s.inclineAngle) >= 90) err('segment' + i, tag + 'incline angle must be between -90 and +90 degrees (exclusive).', 4);
+        if (s.hyd && s.hydStroke !== null && s.hydStroke !== undefined && (isNaN(s.hydStroke) || s.hydStroke <= 0)) err('segment' + i, tag + 'hydraulic stand stroke must be a number greater than zero (or leave it blank).', 4);
       }
     });
     return { errors: errors, warnings: warnings };
@@ -304,6 +309,7 @@
         x += H * Math.cos(hr); y += H * Math.sin(hr); z += rise;
         L.inclined += len; L.total += len; L.horizontal += H;
         d.length = len; d.horizontal = H; d.rise = rise; d.angle = Math.atan2(rise, H) * 180 / Math.PI;
+        if (s.hyd) { d.hyd = true; d.hydCount = s.hydCount || 1; d.hydStrokeMm = s.hydStroke !== null && s.hydStroke !== undefined && !isNaN(s.hydStroke) && s.hydStroke > 0 ? s.hydStroke : null; d.hydRating = s.hydRating || ''; }
         minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
       }
       d.p1 = pts.length - 1;
@@ -455,11 +461,18 @@
         issue('warning', 'Segment ' + (path.incompleteIdx[0] + 1) + ' is missing data, so the route beyond it cannot be calculated. Totals show completed segments only - engineering review required.');
         out.missing.push('Complete data for segment ' + (path.incompleteIdx[0] + 1) + ' (' + segs[path.incompleteIdx[0]].type + ')');
       }
+      out.hydraulic = path.details.filter(function (d) { return d.type === 'incline' && d.hyd; }).map(function (d) {
+        return { seg: d.index + 1, count: d.hydCount, strokeMm: d.hydStrokeMm, rating: d.hydRating, riseM: d.rise, horizontalM: d.horizontal, slopeDeg: d.angle, decline: d.rise < 0 };
+      });
+      out.hydraulic.forEach(function (h) {
+        if (Math.abs(h.riseM) < 0.01) issue('info', 'Segment ' + h.seg + ': a hydraulic stand is selected but this incline has almost no height change, so the stand has little to adjust.');
+        if (h.strokeMm === null) out.missing.push('Hydraulic stand stroke / lift range for segment ' + h.seg + ' (placeholder range is shown in the 3D view)');
+      });
       path.details.forEach(function (d) { if (d.inconsistent) issue('warning', 'Segment ' + (d.index + 1) + ': entered rise and angle disagree by more than 1 degree; the rise was used.'); });
       if (inp.layout === 'multi') issue('info', 'Multi-conveyor layout: only the single chained route you entered is calculated. Parallel lines, merges and transfers need engineering review.');
       if (inp.layout === 'custom') issue('info', 'Custom layout: path length is calculated from the segments you entered; anything else needs engineering review.');
     } else {
-      out.path = null;
+      out.path = null; out.hydraulic = [];
       out.missing.push(inp.layout === 'straight' || !inp.layout ? 'Total route length (straight conveyor)' : 'Route segments (lengths, curve angles/radii, incline data)');
     }
 
@@ -701,6 +714,10 @@
       if (m.length) add('Drive motor(s) placed in the drawing', m.length, 'motor(s)', m.map(function (e) { return (e.name || 'Motor') + (e.rating ? ' - ' + e.rating : ' (rating not entered)'); }).join('; ') + '. Customer-stated only: motor and gearbox sizing remains with Ultraplast engineering.', STATUS.CUSTOMER);
       if (s.length) add('Sensors and other equipment placed in the drawing', s.length, 'item(s)', s.map(function (e) { return (e.name || e.label) + (e.posMm !== null ? ' at ' + round(e.posMm, 0) + ' mm' : ''); }).join('; ') + '. Customer-stated positions; selection, wiring and controls need engineering.', STATUS.CUSTOMER);
     })();
+    if (out.hydraulic && out.hydraulic.length) {
+      var hn = 0; out.hydraulic.forEach(function (h) { hn += h.count; });
+      add('Hydraulic adjustable stand(s) shown in the drawing', hn, 'stand(s)', out.hydraulic.map(function (h) { return 'Segment ' + h.seg + ' (' + (h.decline ? 'decline' : 'incline') + '): ' + h.count + ' stand(s)' + (h.strokeMm !== null ? ', stroke ' + round(h.strokeMm, 0) + ' mm' : ', stroke not entered') + (h.rating ? ', ' + h.rating : ', rating not entered'); }).join('; ') + '. Customer-stated only: cylinder, pump, capacity and locking are not selected or sized by this tool - engineering review required.', STATUS.CUSTOMER);
+    }
     if (inp.feeding === 'automated' || inp.discharge === 'automated' || (inp.accumulation && inp.accumulation !== 'none') || inp.upstream || inp.downstream) add('Sensors and controls', 'To be engineered', null, 'Suggested because of automated handling, accumulation or connected machines. Count depends on control philosophy.', STATUS.REVIEW);
     if (inp.guarding && inp.guarding !== 'none') add('Guards and safety accessories', 'To be engineered', null, 'Guarding level requested: ' + inp.guarding + '. Risk assessment required.', STATUS.REVIEW);
     if (inp.washdown && inp.washdown !== 'none' || inp.foodContact === 'direct') add('Hygienic / washdown construction', 'To be engineered', null, 'Materials, IP rating and drainage need specification.', STATUS.REVIEW);
