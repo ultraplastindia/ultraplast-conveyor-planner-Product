@@ -25,8 +25,8 @@ window.UCP_CONFIG = {
   sheets: {
     engineeringCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT65yKmzRvAChzUWQAiVmMfEqOcayGRqJRusF_0NOiDqBcfQbOx1gM_KRhZDg1iV71D2RaoWdqJoZyU/pub?gid=376085083&single=true&output=csv',
     familiesCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT65yKmzRvAChzUWQAiVmMfEqOcayGRqJRusF_0NOiDqBcfQbOx1gM_KRhZDg1iV71D2RaoWdqJoZyU/pub?gid=457623049&single=true&output=csv',
-    companyCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT65yKmzRvAChzUWQAiVmMfEqOcayGRqJRusF_0NOiDqBcfQbOx1gM_KRhZDg1iV71D2RaoWdqJoZyU/pub?gid=1759845617&single=true&output=csv',
-    timeoutMs: 6000
+    companyCsv: 'https://docs.google.com/spreadsheets/d/e/2PACX-1vT65yKmzRvAChzUWQAiVmMfEqOcayGRqJRusF_0NOiDqBcfQbOx1gM_KRhZDg1iV71D2RaoWdqJoZyU/pub?gid=1759845617&single=true&output=csv'
+      timeoutMs: 6000
   },
   upload: {
     // Public upload endpoint for floor plans / drawings (must be a secure third-party or own service).
