@@ -53,7 +53,7 @@
       } else o.push('<path d="' + d + '" class="sc-path' + (auto ? ' sc-auto' : '') + '"/>');
       (p.details || []).forEach(function (dt) {
         var q = p.points[Math.round((dt.p0 + dt.p1) / 2)]; if (!q) return;
-        var txt = dt.type === 'curve' ? 'R' + f(dt.radius) + ' ' + Math.round(dt.angle) + '°' : (dt.type === 'incline' ? f(dt.length) + ' m ↗' + (dt.rise < 0 ? '(decl.)' : '') : fmt(dt.length));
+        var txt = dt.type === 'curve' ? 'R' + f(dt.radius) + ' ' + Math.round(dt.angle) + '°' : (dt.type === 'incline' ? fmt(dt.length) + ' ↗' + (dt.rise < 0 ? '(decl.)' : '') : fmt(dt.length));
         o.push('<text x="' + f(X(q.x)) + '" y="' + f(Y(q.y) - 8) + '" text-anchor="middle" class="sc-text sc-small sc-halo">' + esc(txt) + '</text>');
       });
       var a = p.points[0], z = p.points[p.points.length - 1];

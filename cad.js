@@ -112,12 +112,13 @@
       }
     });
     /* hydraulic stands (plan): base plates, cylinder bodies, pivot and hand pump */
-    var HK = sc.hydK || { plate: 0.11, tubeR: 0.042, pumpHL: 0.13, pumpHW: 0.09 };
+    var HK = sc.hydK || { plate: 0.11, tubeR: 0.042, pumpHL: 0.13, pumpHW: 0.09, guide: 0.11, sleeve: 0.025, colR: 0.018 };
     (sc.hyd || []).forEach(function (h, i) {
       [1, -1].forEach(function (sg) { var c = [h.x + h.l[0] * h.offM * sg, h.y + h.l[1] * h.offM * sg]; P.poly(rect(c, h.t, h.l, -HK.plate, HK.plate, -HK.plate, HK.plate), true, 'HYD'); P.circle([c[0] * MM, c[1] * MM], HK.tubeR * MM, 'HYD'); });
+      [1, -1].forEach(function (sg) { var g = [h.x + h.l[0] * (h.offM + h.guideM) * sg, h.y + h.l[1] * (h.offM + h.guideM) * sg]; P.poly(rect(g, h.t, h.l, -HK.sleeve, HK.sleeve, -HK.sleeve, HK.sleeve), true, 'HYD'); });   // guide pillars
       var al = 0.5 * ((i % 3) - 1); P.text([(h.x + h.l[0] * (h.offM + 0.4) + h.t[0] * al) * MM, (h.y + h.l[1] * (h.offM + 0.4) + h.t[1] * al) * MM], h.id, 0, 'HYD', { rel: true, mid: true });
     });
-    (sc.hydPump || []).forEach(function (pp) { P.poly(rect([pp.x, pp.y], pp.t, pp.l, -HK.pumpHL, HK.pumpHL, -HK.pumpHW, HK.pumpHW), true, 'HYD_IND'); P.text([pp.x * MM, (pp.y + HK.pumpHW + 0.12) * MM], 'Hand pump (indicative)', 0, 'HYD_IND', { rel: true, mid: true }); });
+    (sc.hydPump || []).forEach(function (pp) { P.poly(rect([pp.x, pp.y], pp.t, pp.l, -(pp.hl || HK.pumpHL), pp.hl || HK.pumpHL, -(pp.hw || HK.pumpHW), pp.hw || HK.pumpHW), true, 'HYD_IND'); P.text([pp.x * MM, (pp.y + (pp.hw || HK.pumpHW) + 0.12) * MM], (pp.type === 'electric' ? 'Electric power pack (indicative)' : 'Hand pump (indicative)'), 0, 'HYD_IND', { rel: true, mid: true }); });
     // belt width dim at the inlet end (placed behind the inlet)
     var wa = L1[0], wb = R1[0], bk = fS.t;
     var up = { a: wb, b: wa }; var sgn0 = (-bk[0] * (-(wa[1] - wb[1])) + -bk[1] * (wa[0] - wb[0])) >= 0 ? 1 : -1;
@@ -165,6 +166,8 @@
       E.poly([[x - rr, tt], [x + rr, tt], [x + rr, rt], [x - rr, rt]], true, 'HYD');
       E.poly([[x - 70, rt], [x + 70, rt], [x + 70, Hh], [x - 70, Hh]], true, 'HYD');
       E.poly([[x - 50, Hh], [x + 50, Hh], [x + 50, Hh + 30], [x - 50, Hh + 30]], true, 'HYD_IND');
+      var slT = h.sleeveTopM * MM, sl = HK.sleeve * MM, cr = HK.colR * MM; E.poly([[x - sl, 12], [x + sl, 12], [x + sl, slT], [x - sl, slT]], true, 'HYD_IND'); E.poly([[x - cr, slT - 120], [x + cr, slT - 120], [x + cr, Hh - 16], [x - cr, Hh - 16]], true, 'HYD_IND');   // guide pillar (behind the cylinder)
+      if (h.rodM > 0.1) E.poly([[x - rr - 16, tt + 12], [x + rr + 16, tt + 12], [x + rr + 16, tt + 30], [x - rr - 16, tt + 30]], true, 'HYD');   // safety lock collar
       E.dim([x + tr + 60, 0], [x + tr + 60, Hh], -150 - 110 * (i % 2), h.id + ' height ' + Math.round(Hh) + ' mm', 'calc');
       if (h.rodM > 0.02) E.dim([x - tr - 60, tt], [x - tr - 60, tt + h.rodM * MM], 150, h.id + ' rod out ' + Math.round(h.rodM * MM) + ' mm', 'ind');
       E.text([x, Hh + 70], h.id, 0, 'HYD', { rel: true, mid: true });
@@ -231,7 +234,8 @@
         S.poly([[lx - rr1, tt1], [lx + rr1, tt1], [lx + rr1, Hh1 - 16], [lx - rr1, Hh1 - 16]], true, 'HYD');
         S.poly([[lx - 55, Hh1 - 16], [lx + 55, Hh1 - 16], [lx + 55, Hh1], [lx - 55, Hh1]], true, 'HYD');
       });
-      S.poly([[cx - off1 - 30, Hh1], [cx + off1 + 30, Hh1], [cx + off1 + 30, Hh1 + 30], [cx - off1 - 30, Hh1 + 30]], true, 'HYD_IND');
+      S.poly([[cx - off1 - HK.guide * MM - 30, Hh1], [cx + off1 + HK.guide * MM + 30, Hh1], [cx + off1 + HK.guide * MM + 30, Hh1 + 30], [cx - off1 - HK.guide * MM - 30, Hh1 + 30]], true, 'HYD_IND');
+      [1, -1].forEach(function (sg) { var gx = cx + sg * (off1 + HK.guide * MM), sl = HK.sleeve * MM, cr = HK.colR * MM, slT = h1.sleeveTopM * MM; S.poly([[gx - sl, 12], [gx + sl, 12], [gx + sl, slT], [gx - sl, slT]], true, 'HYD'); S.poly([[gx - cr, slT - 120], [gx + cr, slT - 120], [gx + cr, Hh1 - 16], [gx - cr, Hh1 - 16]], true, 'HYD'); S.poly([[gx - 60, 0], [gx + 60, 0], [gx + 60, 12], [gx - 60, 12]], true, 'HYD'); });   // guide pillars
       S.poly([[cx - off1 + tr1, tt1 * 0.45 - 12], [cx + off1 - tr1, tt1 * 0.45 - 12], [cx + off1 - tr1, tt1 * 0.45 + 12], [cx - off1 + tr1, tt1 * 0.45 + 12]], true, 'HYD_IND');
       S.poly([[cx + off1 + 550 - 90, 0], [cx + off1 + 550 + 90, 0], [cx + off1 + 550 + 90, 200], [cx + off1 + 550 - 90, 200]], true, 'HYD_IND');
       S.text([cx + off1 + 550, 260], 'Pump (indicative)', 0, 'HYD_IND', { rel: true, mid: true });
@@ -337,9 +341,9 @@
   }
   function hydSchedule(M) {
     var rows = (M.sc.hyd || []).map(function (h) {
-      return [h.id, 'S' + h.seg + (h.decline ? ' decline' : ' incline'), mmS(h.s), mmS(h.heightM) + ' (calc.)', mmS(h.rodM) + ' *', h.strokeMm ? String(Math.round(h.strokeMm)) : 'not entered *', h.rating || 'not entered', String(h.count) + ' per segment'];
+      return [h.id, 'S' + h.seg + (h.decline ? ' decline' : ' incline'), mmS(h.s), mmS(h.heightM) + ' (calc.)', mmS(h.rodM) + ' *', h.strokeMm ? String(Math.round(h.strokeMm)) : 'not entered *', h.rating || 'not entered', String(h.count) + ' per segment', (h.pump === 'electric' ? 'Electric power pack' : 'Hand pump') + ' *'];
     });
-    return { title: 'HYDRAULIC STAND SCHEDULE - height calculated from the route; * = placeholder / not entered. Cylinder, pump and capacity are NOT selected or sized by this tool', head: ['Tag', 'Segment', 'From inlet (mm, along route)', 'Stand height to frame (mm)', 'Rod out (mm)', 'Stroke (mm, as entered)', 'Cylinder / capacity (as entered)', 'Stands'], rows: rows };
+    return { title: 'HYDRAULIC STAND SCHEDULE - height calculated from the route; * = placeholder / not entered. Cylinder, pump and capacity are NOT selected or sized by this tool', head: ['Tag', 'Segment', 'From inlet (mm, along route)', 'Stand height to frame (mm)', 'Rod out (mm)', 'Stroke (mm, as entered)', 'Cylinder / capacity (as entered)', 'Stands', 'Pump unit'], rows: rows };
   }
   function segSchedule(M) {
     var det = (M.inp.path && M.inp.path.details) || [], rows = det.map(function (d, k) {
@@ -427,8 +431,18 @@
       out.push({ pts: pts, depth: q.tag === 'floor' ? 1e9 : depth, rgb: rgb, a: q.a, tag: q.tag }); });
     out.sort(function (a, b) { return b.depth - a.depth; }); return out;
   }
+  /** Diagonal DOUBLE-LAYER watermark (company full name + logo) drawn under the sheet content. uid keeps pattern ids unique when two sheets share one file. */
+  function wmSvg(W, H, M, uid) {
+    var name = String((M.meta && M.meta.company) || 'Ultraplast Chainbelts Private Limited').toUpperCase(), logo = M.meta && M.meta.logoUrl, PW = 330, PH = 42;
+    function pat(id, color, op, dx, dy) {
+      return '<pattern id="' + id + '" width="' + PW + '" height="' + PH + '" patternUnits="userSpaceOnUse" patternTransform="rotate(-35) translate(' + dx + ' ' + dy + ')"><g opacity="' + op + '" fill="' + color + '">' +
+        (logo ? '<image href="' + esc(logo) + '" x="0" y="8" width="26" height="9" preserveAspectRatio="xMinYMid meet"/>' : '') +
+        '<text x="' + (logo ? 29 : 0) + '" y="16" font-size="6.2" font-weight="bold" font-family="Arial,Helvetica,sans-serif">' + esc(name) + '</text></g></pattern>';
+    }
+    return '<defs>' + pat('wm1' + uid, '#444', 0.11, 0, 0) + pat('wm2' + uid, '#c8102e', 0.1, 150, 21) + '</defs><rect width="' + W + '" height="' + H + '" fill="url(#wm1' + uid + ')"/><rect width="' + W + '" height="' + H + '" fill="url(#wm2' + uid + ')"/>';
+  }
   function toSVG(M) {
-    var W = 420, H = 297, s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + 'mm" height="' + H + 'mm" font-family="Arial,Helvetica,sans-serif"><rect width="' + W + '" height="' + H + '" fill="#fff"/>';
+    var W = 420, H = 297, s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + 'mm" height="' + H + 'mm" font-family="Arial,Helvetica,sans-serif"><rect width="' + W + '" height="' + H + '" fill="#fff"/>' + wmSvg(W, H, M, 'a') + '';
     s += '<rect x="8" y="8" width="' + (W - 16) + '" height="' + (H - 16) + '" fill="none" stroke="#000" stroke-width="0.7"/>';
     if (!M.ok) return s + '<text x="20" y="40" font-size="5">' + esc(M.notes[M.notes.length - 1] || 'No drawing data') + '</text></svg>';
     var v = M.views, pl = v[0], sd = v[1], en = v[2];
@@ -456,7 +470,7 @@
 
   /** Sheet 2 (A3): equipment schedule, route schedule and notes. Returns SVG text for one sheet, drawn at the given y offset. */
   function sheet2(M, oy) {
-    var W = 420, H = 297, s = '<g transform="translate(0,' + oy + ')"><rect width="' + W + '" height="' + H + '" fill="#fff"/><rect x="8" y="8" width="' + (W - 16) + '" height="' + (H - 16) + '" fill="none" stroke="#000" stroke-width="0.7"/>';
+    var W = 420, H = 297, s = '<g transform="translate(0,' + oy + ')"><rect width="' + W + '" height="' + H + '" fill="#fff"/>' + wmSvg(W, H, M, oy ? 'c' : 'b') + '<rect x="8" y="8" width="' + (W - 16) + '" height="' + (H - 16) + '" fill="none" stroke="#000" stroke-width="0.7"/>';
     s += '<text x="14" y="20" font-size="6" font-weight="bold">ULTRAPLAST CHAINBELTS PVT. LTD. - SCHEDULES</text><text x="14" y="27" font-size="3.2">' + esc((M.meta.title || 'Conveyor general arrangement') + '   Date ' + (M.meta.date || '')) + '</text>';
     function table(T, y, widths) {
       var x0 = 14, rowH = 6.2, x = x0, i, j;
@@ -472,7 +486,7 @@
     }
     var y = table(equipSchedule(M), 38, [12, 32, 24, 52, 16, 44, 42, 38, 36, 70]);
     y = table(segSchedule(M), y, [14, 28, 34, 34, 34, 44, 34]);
-    if ((M.sc.hyd || []).length) y = table(hydSchedule(M), y, [14, 30, 46, 46, 28, 46, 80, 30]);
+    if ((M.sc.hyd || []).length) y = table(hydSchedule(M), y, [14, 28, 42, 42, 24, 42, 70, 26, 36]);
     var notes = ['INDICATIVE drawing - for engineering review, not for manufacture.', 'Dimension colours: black = entered, red = calculated, grey = indicative (frame, legs, placeholder sizes marked *).', 'Dimensions in the DXF are lines and text, not associative AutoCAD DIMENSION objects; they were checked against the geometry they describe.', 'Motor, sensor ratings are shown exactly as typed. This tool does not select or size any motor, sensor, belt, chain or structure.'].concat(M.notes.filter(function (n) { return !/INDICATIVE|associative/.test(n); }));
     s += '<text x="14" y="' + y + '" font-size="3.8" font-weight="bold">NOTES</text>';
     notes.forEach(function (t, i) { s += '<text x="14" y="' + (y + 6 + i * 5) + '" font-size="2.9"' + (i === 0 ? ' fill="#a33" font-weight="bold"' : '') + '>' + esc(t) + '</text>'; });

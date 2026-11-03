@@ -51,7 +51,12 @@
       }
       return { status: 'sent', message: 'Enquiry received by the service.' };
     }).catch(function () {
-      return timedOut ? null : { status: 'failed', message: 'Network error. Your enquiry has NOT been sent. Please check your connection or use email.' };
+      if (timedOut) return null;
+      var hint = '';
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) hint = ' This device appears to be offline.';
+      else if (/script\.google(usercontent)?\.com/.test(cfg.endpoint) && cfg.sendAs !== 'text') hint = ' Setup fix: in config.js set sendAs: \'text\' and successField: \'ok\' for a Google Apps Script link.';
+      else if (/script\.google(usercontent)?\.com/.test(cfg.endpoint)) hint = ' Setup fix: in Apps Script use Deploy > Manage deployments > Who has access = Anyone, and use the /exec link (not /dev).';
+      return { status: 'failed', message: 'Network error. Your enquiry has NOT been sent. Please check your connection or use email.' + hint };
     });
     return Promise.race([req, timeout]).then(function (r) { clearTimeout(timer); return r || { status: 'failed', message: 'The enquiry service did not respond in time. Your enquiry has NOT been sent.' }; });
   }

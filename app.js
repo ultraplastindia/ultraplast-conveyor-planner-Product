@@ -48,19 +48,45 @@
   }
 
   /* ----------------------------------------------------------- unit labels */
+  var UNIT_NAMES = { mm: 'millimetres', m: 'metres', ft: 'feet', 'in': 'inches' };
   function ul(kind) {
-    var im = state.unitSystem === 'imperial';
-    return { m: im ? 'ft' : 'm', mm: im ? 'in' : 'mm', speed: im ? 'ft/min' : 'm/min', temp: im ? '°F' : '°C', deg: '°', num: '', weight: '' }[kind] || '';
+    var ls = { m: C.unitFor('m', state.unitSystem), mm: C.unitFor('mm', state.unitSystem), speed: C.isImperial(state.unitSystem) ? 'ft/min' : 'm/min', temp: C.isImperial(state.unitSystem) ? '°F' : '°C', deg: '°', num: '', weight: '' };
+    return ls[kind] || '';
   }
-  function fmtLen(m) {                       // metres -> display string honouring unit system
+  function trimNum(v, dp) { return String(+v.toFixed(dp)); }
+  function fmtLen(m) {                       // metres -> display string honouring the chosen unit(s)
     if (m === null || m === undefined || isNaN(m)) return '-';
-    var s = (Math.round(m * 100) / 100).toFixed(2) + ' m';
-    return state.unitSystem === 'imperial' ? (Math.round(m / 0.3048 * 100) / 100).toFixed(2) + ' ft (' + s + ')' : s;
+    var sys = state.unitSystem, s = (Math.round(m * 100) / 100).toFixed(2) + ' m';
+    if (sys === 'imperial') return (Math.round(m / 0.3048 * 100) / 100).toFixed(2) + ' ft (' + s + ')';
+    if (sys === 'metric') return s;
+    var u = C.unitFor('m', sys), v = C.lenFromM(m, u);
+    return u === 'mm' ? Math.round(v) + ' mm' : u === 'm' ? trimNum(v, 3) + ' m' : u === 'ft' ? trimNum(v, 2) + ' ft' : trimNum(v, 1) + ' in';
   }
   function fmtMm(mm) {
     if (mm === null || mm === undefined || isNaN(mm)) return '-';
-    var s = Math.round(mm) + ' mm';
-    return state.unitSystem === 'imperial' ? (Math.round(mm / 25.4 * 100) / 100) + ' in (' + s + ')' : s;
+    var sys = state.unitSystem, s = Math.round(mm) + ' mm';
+    if (sys === 'imperial') return (Math.round(mm / 25.4 * 100) / 100) + ' in (' + s + ')';
+    if (sys === 'metric') return s;
+    var u = C.unitFor('mm', sys), v = C.lenFromM(mm / 1000, u);
+    return u === 'mm' ? Math.round(v) + ' mm' : u === 'm' ? trimNum(v, 3) + ' m' : u === 'ft' ? trimNum(v, 2) + ' ft' : trimNum(v, 1) + ' in';
+  }
+  /* single-unit systems (mm / m / ft / in): turn "1500 mm" / "4 m" written in fixed text into the chosen unit. Mixed systems keep their original wording. */
+  function convText(t) {
+    var sys = state.unitSystem; if (!t || ['mm', 'm', 'ft', 'in'].indexOf(sys) < 0) return t;
+    return String(t).replace(/(-?\d[\d,]*(?:\.\d+)?) (mm|m)(?![A-Za-z0-9\/²³])/g, function (all, num, src) {
+      var v = parseFloat(num.replace(/,/g, '')); if (!isFinite(v)) return all;
+      var mm = src === 'mm' ? v : v * 1000; return fmtMm(mm);
+    });
+  }
+  function convDom(root) {
+    if (!root || ['mm', 'm', 'ft', 'in'].indexOf(state.unitSystem) < 0) return;
+    var w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: function (n) { var p = n.parentNode; if (!p || /^(SCRIPT|STYLE|TEXTAREA|INPUT|OPTION)$/.test(p.nodeName) || (p.closest && p.closest('.cadsheet,[data-nounits]'))) return NodeFilter.FILTER_REJECT; return /\d (mm|m)(?![A-Za-z0-9\/²³])/.test(n.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT; } }), list = [], n;
+    while ((n = w.nextNode())) list.push(n);
+    list.forEach(function (t) { t.nodeValue = convText(t.nodeValue); });
+  }
+  function unitHint(t) {
+    if (state.unitSystem === 'metric') return t;
+    return String(t).replace(/in metres/g, 'in ' + UNIT_NAMES[C.unitFor('m', state.unitSystem)]).replace(/in mm\b/g, 'in ' + UNIT_NAMES[C.unitFor('mm', state.unitSystem)]).replace(/Belt speed in metres per minute/, 'Belt speed in ' + (C.isImperial(state.unitSystem) ? 'feet' : 'metres') + ' per minute');
   }
   function num2(v, dp) { return v === null || v === undefined || isNaN(v) ? '-' : String(Math.round(v * Math.pow(10, dp === undefined ? 2 : dp)) / Math.pow(10, dp === undefined ? 2 : dp)); }
 
@@ -70,7 +96,7 @@
 
   function field(name, label, o) {
     o = o || {};
-    var v = state.values[name], id = 'f_' + name, hint = o.hint ? '<small class="hint" id="h_' + name + '">' + esc(o.hint) + '</small>' : '';
+    var v = state.values[name], id = 'f_' + name, hint = o.hint ? '<small class="hint" id="h_' + name + '">' + esc(unitHint(o.hint)) + '</small>' : '';
     var kind = o.kind || C.FIELD_KINDS[name], unit = kind && kind !== 'num' && kind !== 'weight' ? ' <span class="unit">(' + ul(kind) + ')</span>' : (o.unit ? ' <span class="unit">(' + esc(o.unit) + ')</span>' : '');
     var req = (state.suggested && state.suggested[name]) ? ' <span class="badge sug" title="Typical value filled in for you - please check or edit">Suggested - check</span>' : o.req ? ' <span class="badge need">Needed</span>' : (o.type === 'select' || o.type === 'check' ? '' : (o.rec ? ' <span class="badge rec">Helpful</span>' : ' <span class="badge opt">Optional</span>'));
     var desc = ' aria-describedby="' + (o.hint ? 'h_' + name + ' ' : '') + 'e_' + name + '"';
@@ -107,7 +133,7 @@
     S: [['straight'], ['curve', 'left'], ['straight'], ['curve', 'right'], ['straight']], inclined: [['straight'], ['incline'], ['straight']],
     curved: [['straight'], ['curve', 'left'], ['straight']], multi: [['straight']], custom: [['straight']]
   };
-  function newSeg(type, dir) { return { type: type, length: '', angle: type === 'curve' ? '90' : '', radius: '', direction: dir || 'left', horizontal: '', rise: '', inclineAngle: '', hyd: '', hydCount: '1', hydStroke: '', hydRating: '' }; }
+  function newSeg(type, dir) { return { type: type, length: '', angle: type === 'curve' ? '90' : '', radius: '', direction: dir || 'left', horizontal: '', rise: '', inclineAngle: '', hyd: '', hydCount: '1', hydStroke: '', hydRating: '', hydPump: 'hand' }; }
 
   /* ---------------------------------------------------------------- Quick fill: industry + weight -> suggested product details */
   var KG = { g: 0.001, kg: 1, oz: 0.0283495, lb: 0.45359237 };
@@ -284,6 +310,7 @@
         hydBlock = '<div class="hydrow"><label class="chk hydchk"><input type="checkbox" data-hyd="hyd" data-i="' + i + '"' + (on ? ' checked' : '') + '> <b>Support with hydraulic stand(s)</b> <small>(height-adjustable)</small></label>' +
           (on ? '<label class="mini"><span>Number of stands</span><select data-hyd="hydCount" data-i="' + i + '">' + ['1', '2', '3'].map(function (n) { return '<option value="' + n + '"' + (String(s.hydCount || '1') === n ? ' selected' : '') + '>' + n + '</option>'; }).join('') + '</select></label>' +
             '<label class="mini"><span>Adjustable stroke (' + ul('mm') + ') - optional</span><input type="text" inputmode="decimal" data-hyd="hydStroke" data-i="' + i + '" value="' + esc(s.hydStroke) + '" placeholder="leave blank if unknown"></label>' +
+            '<label class="mini"><span>Pump unit</span><select data-hyd="hydPump" data-i="' + i + '"><option value="hand"' + (s.hydPump !== 'electric' ? ' selected' : '') + '>Hand pump</option><option value="electric"' + (s.hydPump === 'electric' ? ' selected' : '') + '>Electric power pack</option></select></label>' +
             '<label class="mini"><span>Cylinder / capacity (as you know it) - optional</span><input type="text" data-hyd="hydRating" data-i="' + i + '" value="' + esc(s.hydRating) + '" maxlength="60" placeholder="e.g. 2 t, as per your standard"></label>' +
             '<span class="note hydnote">Drawn as a twin-cylinder stand with a hand pump. Ultraplast engineering selects and sizes the cylinders; nothing is sized here.</span>' : '') + '</div>';
       }
@@ -458,7 +485,7 @@
       (rec.selectedId !== rec.primaryId ? '<p class="note">You selected this type. Automatic suggestion was: <b>' + esc(cats[rec.primaryId].name) + '</b>.</p>' : '') +
       '<p>' + esc(rec.selected.summary) + '</p><h4>Why</h4><ul>' + rec.reasons.map(function (r) { return '<li>' + esc(r) + '</li>'; }).join('') + '</ul>' +
       (rec.alternatives.length ? '<h4>Alternatives to discuss</h4><p>' + rec.alternatives.map(function (a) { return esc(cats[a].name); }).join(' &middot; ') + '</p>' : '') + '</section>');
-    h.push('<section class="card" id="simCard"><h3>Your conveyor in 3D</h3><p class="note">Built from your answers: route, floor (if given), curve radii, inclines, heights, belt width, product size and spacing. Drag to turn it, scroll or pinch to zoom, Shift+drag to move. Use Top, Front and Side for flat views.</p>' +
+    h.push('<section class="card" id="simCard"><h3>Your conveyor in 3D</h3><p class="note">Built from your answers: route, floor (if given), curve radii, inclines, heights, belt width, product size and spacing. Drag to turn it, scroll or pinch to zoom, Shift+drag to move. Use Top, Front and Side for flat views.</p>' + fixPanelHtml(inp, res) +
       '<div class="tabs" role="tablist" aria-label="Conveyor views"><button type="button" role="tab" class="tab" data-tab="3d" aria-selected="true">3D model</button><button type="button" role="tab" class="tab" data-tab="plan" aria-selected="false">Plan view (2D) and side profile</button></div>' +
       '<div id="v3dMsg"></div><div id="hydBox3"></div><div id="v3dHost"></div><div id="simHost" hidden></div></section>');
     h.push(cadCard(inp, res));
@@ -513,7 +540,7 @@
     h.push('<section class="card" id="actions"><h3>Download your project summary</h3><div class="btnrow"><button type="button" class="btn primary" id="btnPdf">Download PDF report</button><button type="button" class="btn" id="btnJson">Download JSON summary</button><button type="button" class="btn ghost" id="btnPrint">Print</button></div><p class="note" id="dlMsg" role="status"></p></section>');
     h.push(enquiryHtml());
     if (sim) { sim.destroy(); sim = null; } if (view3) { view3.destroy(); view3 = null; } planStarted = false;
-    wrap.innerHTML = h.join('');
+    wrap.innerHTML = h.join(''); convDom(wrap);
     start3d(inp, res); fillHydPanels(); if (costEnabled()) initCost(inp, res);
     updateEnquiryStatus();
   }
@@ -560,7 +587,7 @@
   var cadModel = null;
   function cadBuild(inp, res) {
     var plan = simPlan(inp, res), raw = (state.result && state.result.raw) || {};
-    return CAD.build(v3dScene(inp, res, plan, true), { title: (raw.projectName || 'Conveyor') + ' - general arrangement', date: new Date().toISOString().slice(0, 10) });
+    return CAD.build(v3dScene(inp, res, plan, true), { title: (raw.projectName || 'Conveyor') + ' - general arrangement', date: new Date().toISOString().slice(0, 10), company: P.company.name, logoUrl: P.company.logoUrl });
   }
   function cadCard(inp, res) {
     var m; try { m = cadModel = cadBuild(inp, res); } catch (e) { cadModel = null; return '<section class="card"><h3>Engineering drawing (CAD)</h3><p class="banner warn">The drawing could not be generated (' + esc(e.message) + ').</p></section>'; }
@@ -573,14 +600,19 @@
       '<details class="mfg"><summary><b>Can this drawing be used for manufacturing? No.</b></summary><p>It is <b>indicative, for engineering review, not for manufacture</b>. Frame, guides, legs, rollers and motor are placeholder sizes; there is no motor, tension or structural engineering, no bill of materials, and dimensions are lines and text only. It is a correct starting point for Ultraplast engineers, who must supply the real standard parts and calculations and approve each drawing before anything is built from it.</p></details></section>';
   }
   /* ---- hydraulic stand: raise / lower the incline in the running 3D view (a what-if; the entered values and the drawings stay as entered until "Keep this height") ---- */
-  var hydTimer = null;
+  var hydTimer = null, hydAuto = null;
+  function hydAutoStop() { if (hydAuto) { clearInterval(hydAuto.t); hydAuto = null; } document.querySelectorAll('[data-hydauto]').forEach(function (b) { b.innerHTML = '&#9654; Auto up / down (demo)'; b.setAttribute('aria-pressed', 'false'); }); }
+  function hydAutoStart(k) {
+    var dir = 1; hydAuto = { k: k, t: setInterval(function () { var el = document.querySelector('[data-hydlift="' + k + '"]'); if (!el) { hydAutoStop(); return; } var v = +el.value + 10 * dir; if (v >= +el.max) { v = +el.max; dir = -1; } else if (v <= +el.min) { v = +el.min; dir = 1; } el.value = v; hydSlide(el); }, 160) };
+    document.querySelectorAll('[data-hydauto="' + k + '"]').forEach(function (b) { b.innerHTML = '&#9632; Stop auto up / down'; b.setAttribute('aria-pressed', 'true'); });
+  }
   function hydList(inp, res) {
     var out = [], k = 0, segs = C.segmentsFromInputs(inp);
     if (!res || !res.path) return out;
     res.path.details.forEach(function (d) {
       if (d.type !== 'incline' || !d.hyd) return;
       var rangeMm = d.hydStrokeMm ? d.hydStrokeMm / 2 : 150;
-      out.push({ k: k, seg: d.index + 1, d: d, rangeMm: rangeMm, strokeMm: d.hydStrokeMm, count: d.hydCount, rating: d.hydRating });
+      out.push({ k: k, seg: d.index + 1, d: d, rangeMm: rangeMm, strokeMm: d.hydStrokeMm, count: d.hydCount, rating: d.hydRating, pump: d.hydPump });
       k++;
     });
     return out;
@@ -608,7 +640,7 @@
         '<input type="range" id="hydlift' + h.k + '" data-hydlift="' + h.k + '" min="' + (-h.rangeMm) + '" max="' + h.rangeMm + '" step="5" value="' + dl + '" aria-label="Height change of segment ' + h.seg + ' in millimetres">' +
         '<button type="button" class="btn sm" data-hydstep="' + h.k + '" data-dir="1" aria-label="Raise">&#9650; Raise</button></div>' +
         '<p class="hydread" data-hydread="' + h.k + '" role="status">' + hydReadout(h, cur, entered, dl) + '</p>' +
-        '<div class="hydbtns"><button type="button" class="btn ghost sm" data-hydreset="' + h.k + '">Reset to entered height</button><button type="button" class="btn sm primary" data-hydkeep="' + h.k + '"' + (dl ? '' : ' disabled') + '>Keep this height (write to the route)</button></div></div>';
+        '<div class="hydbtns"><button type="button" class="btn sm" data-hydauto="' + h.k + '" aria-pressed="' + (hydAuto && hydAuto.k === h.k ? 'true' : 'false') + '">' + (hydAuto && hydAuto.k === h.k ? '&#9632; Stop auto up / down' : '&#9654; Auto up / down (demo)') + '</button><button type="button" class="btn ghost sm" data-hydreset="' + h.k + '">Reset to entered height</button><button type="button" class="btn sm primary" data-hydkeep="' + h.k + '"' + (dl ? '' : ' disabled') + '>Keep this height (write to the route)</button></div></div>';
     }).join('') + '<p class="note">Try raising or lowering the section to see the angle and the stand extend or retract while the belt runs. The travel range is &plusmn;half of the stroke you entered' + (list.some(function (h) { return !h.strokeMm; }) ? ' (&plusmn;150 mm placeholder where no stroke was entered)' : '') + '. This is a what-if only: it does not check cylinder capacity, stability or the frame. <b>Keep this height</b> copies it into the route so the results and drawings use it. Engineering review required.</p></div>';
   }
   function hydSig(inp, res) { return hydList(inp, res).map(function (h) { return h.k + ':' + h.seg + ':' + h.count + ':' + h.rangeMm + ':' + h.rating + ':' + h.d.rise; }).join('|'); }
@@ -644,9 +676,10 @@
     hydRefresh3d();
   }
   function hydClick(t) {
+    var au = t.getAttribute('data-hydauto'); if (au !== null) { if (hydAuto) hydAutoStop(); else hydAutoStart(au); return true; }
     var st = t.getAttribute('data-hydstep'), rs = t.getAttribute('data-hydreset'), kp = t.getAttribute('data-hydkeep');
     if (st !== null) { var el = document.querySelector('[data-hydlift="' + st + '"]'); if (!el) return true; var nv = Math.max(+el.min, Math.min(+el.max, (+el.value) + 25 * (+t.getAttribute('data-dir')))); el.value = nv; hydSlide(el); return true; }
-    if (rs !== null) { delete state.hydDelta[rs]; fillHydPanels(); hydRefresh3d(); return true; }
+    if (rs !== null) { hydAutoStop(); delete state.hydDelta[rs]; fillHydPanels(); hydRefresh3d(); return true; }
     if (kp !== null) {
       var r = state.step === 5 ? state.result : null, inp, res; if (r) { inp = r.inp; res = r.res; } else { inp = C.normalize(raw()); res = C.analyse(inp, P); }
       var list = hydList(inp, res), h = list[+kp]; if (!h) return true;
@@ -660,6 +693,56 @@
       return true;
     }
     return false;
+  }
+  /* ---- results page: fix a wrong length, angle or height (above the 3D conveyor). Changes the entered values, then everything is recalculated ---- */
+  function segMap() {   // state.segments index for each calculated segment (rows with nothing entered are dropped by normalize)
+    var out = []; state.segments.forEach(function (sg, i) { var n = C.normalize({ unitSystem: state.unitSystem, segments: [sg] }); if (n.segments.length) out.push(i); }); return out;
+  }
+  function dispNum(kind, metricVal) { var v = C.fromMetric(kind, metricVal, state.unitSystem); return isFinite(v) ? String(+v.toFixed(kind === 'deg' ? 2 : 3)) : ''; }
+  function fixField(key, label, unit, val, calc) {
+    return '<label class="mini fixf"><span>' + label + (unit ? ' (' + unit + ')' : '') + (calc ? ' <em>calculated</em>' : '') + '</span><input type="text" inputmode="decimal" data-fix="' + key + '" value="' + esc(val) + '" aria-label="' + esc(label) + '"><span class="err fixerr" role="alert"></span></label>';
+  }
+  function fixPanelHtml(inp, res) {
+    var h = [], lay = state.values.layout, V = state.values;
+    if (lay === 'straight' || (!state.segments.length && V.routeLength !== undefined)) {
+      h.push('<div class="fixrow"><b class="fixt">Conveyor</b>' + fixField('v|routeLength', 'Route length', ul('m'), V.routeLength || '', false) + '</div>');
+    } else {
+      var map = segMap(), det = (res.path && res.path.details) || [];
+      state.segments.forEach(function (sg, i) {
+        var k = map.indexOf(i), d = k >= 0 ? det[k] : null, nm = 'S' + (i + 1) + ' ';
+        if (sg.type === 'straight') h.push('<div class="fixrow"><b class="fixt">' + nm + 'Straight</b>' + fixField('s|' + i + '|length', 'Length', ul('m'), sg.length || (d ? dispNum('m', d.length) : ''), !sg.length && !!d) + '</div>');
+        else if (sg.type === 'curve') h.push('<div class="fixrow"><b class="fixt">' + nm + 'Curve ' + (sg.direction === 'right' ? 'right' : 'left') + '</b>' + fixField('s|' + i + '|angle', 'Turn angle', '°', sg.angle || '', false) + fixField('s|' + i + '|radius', 'Centre-line radius', ul('mm'), sg.radius || '', false) + '</div>');
+        else {
+          var rise = sg.rise !== '' ? sg.rise : (d ? dispNum('mm', d.rise * 1000) : ''), ang = sg.inclineAngle !== '' ? sg.inclineAngle : (d ? dispNum('deg', d.angle) : ''), hor = sg.horizontal !== '' ? sg.horizontal : (d ? dispNum('m', d.horizontal) : '');
+          h.push('<div class="fixrow"><b class="fixt">' + nm + (d && d.rise < 0 ? 'Decline' : 'Incline') + '</b>' + fixField('s|' + i + '|horizontal', 'Horizontal run', ul('m'), hor, sg.horizontal === '' && !!d) + fixField('s|' + i + '|rise', 'Height change (rise, - = decline)', ul('mm'), rise, sg.rise === '' && !!d) + fixField('s|' + i + '|inclineAngle', 'Angle', '°', ang, sg.inclineAngle === '' && !!d) + '</div>');
+        }
+      });
+    }
+    h.push('<div class="fixrow"><b class="fixt">Heights and width</b>' + fixField('v|inletHeight', 'Inlet height', ul('mm'), V.inletHeight || '', false) + fixField('v|dischargeHeight', 'Discharge height', ul('mm'), V.dischargeHeight || '', false) + fixField('v|beltWidth', 'Belt width', ul('mm'), V.beltWidth || '', false) + '</div>');
+    return '<details class="fixpanel" id="fixPanel" open><summary><b>Wrong measurement? Change the length, angle or height here</b></summary><p class="note">Type the corrected value and press Enter or tap outside the box. The 3D conveyor, drawings, results and PDF are recalculated at once. For an incline, changing the <b>angle</b> recalculates the rise and changing the <b>rise</b> recalculates the angle (the horizontal run stays). Values are in ' + esc(C.UNIT_LABELS[state.unitSystem] || 'metric') + '.</p>' + h.join('') + '<p class="note" id="fixMsg" role="status"></p></details>';
+  }
+  function fixApply(t) {
+    var key = t.getAttribute('data-fix').split('|'), val = t.value.trim(), box = t.closest('.fixf'), er = box && box.querySelector('.fixerr'), n = C.parseNum(val), bad = '';
+    var name = key[0] === 'v' ? key[1] : key[2], blankOk = key[0] === 'v' && name !== 'routeLength';
+    if (val === '') { if (!blankOk) bad = 'Enter a number.'; }
+    else if (isNaN(n)) bad = 'Enter a number such as 1500 or 12.5.';
+    else if (['length', 'routeLength', 'horizontal', 'radius', 'beltWidth', 'angle'].indexOf(name) >= 0 && n <= 0) bad = 'Must be greater than zero.';
+    else if (['inletHeight', 'dischargeHeight'].indexOf(name) >= 0 && n < 0) bad = 'Cannot be negative.';
+    else if (name === 'inclineAngle' && Math.abs(n) >= 90) bad = 'Angle must be between -90 and +90.';
+    else if (name === 'angle' && n > 360) bad = 'Angle must be 360 or less.';
+    if (bad) { if (er) er.textContent = bad; t.setAttribute('aria-invalid', 'true'); return; }
+    if (key[0] === 'v') state.values[name] = val;
+    else {
+      var sg = state.segments[+key[1]]; if (!sg) return; sg[name] = val;
+      if (sg.type === 'incline') {
+        if (name === 'inclineAngle' && val !== '') { sg.rise = ''; }
+        if (name === 'rise' && val !== '') { sg.inclineAngle = ''; }
+        if (!sg.horizontal) { var det = (state.result && state.result.res.path && state.result.res.path.details) || [], kk = segMap().indexOf(+key[1]); if (kk >= 0 && det[kk]) sg.horizontal = dispNum('m', det[kk].horizontal); }
+      }
+    }
+    state.dirty = true; var y = window.scrollY; renderResults(); window.scrollTo(0, y);
+    var m = $('#fixMsg'); if (m) m.textContent = 'Updated - results, 3D view, drawings and PDF now use the new value.';
+    toast('Measurement updated and recalculated.');
   }
   function v3dOpts(inp, res, plan, extra) {
     var ad = hydAdjusted(inp, res); if (ad.res !== res) { inp = ad.inp; res = ad.res; plan = simPlan(inp, res); }
@@ -849,8 +932,9 @@
     try { var r = state.result, sum = R.buildSummary(r.raw, r.inp, r.res, P); download('Ultraplast-' + slug(r.raw.projectName) + '.json', JSON.stringify(sum, null, 2), 'application/json'); msg('JSON summary downloaded.'); }
     catch (e) { msg('Could not create the JSON file (' + e.message + ').', true); }
   }
+  function deepConv(o) { if (typeof o === 'string') return convText(o); if (Array.isArray(o)) return o.map(deepConv); if (o && typeof o === 'object') { var r = {}; Object.keys(o).forEach(function (k) { r[k] = (k === 'meta') ? o[k] : deepConv(o[k]); }); return r; } return o; }
   function doPdf() {
-    try { var r = state.result, bytes = R.renderPdf(R.buildReportModel(r.raw, r.inp, r.res, P)); download('Ultraplast-' + slug(r.raw.projectName) + '.pdf', bytes, 'application/pdf'); msg('PDF report downloaded.'); }
+    try { var r = state.result, bytes = R.renderPdf(deepConv(R.buildReportModel(r.raw, r.inp, r.res, P))); download('Ultraplast-' + slug(r.raw.projectName) + '.pdf', bytes, 'application/pdf'); msg('PDF report downloaded.'); }
     catch (e) { msg('The PDF could not be created (' + e.message + '). Use "Print" and choose "Save as PDF" instead.', true); }
   }
 
@@ -895,7 +979,7 @@
         var f = j && j.schema === 'ultraplast-conveyor-planner/project/1' && j.formState ? j.formState : (j && j.unitSystem && j.layout !== undefined ? j : null);
         if (!f) throw new Error('Not an Ultraplast Planner project file.');
         var s = fresh();
-        s.unitSystem = f.unitSystem === 'imperial' ? 'imperial' : 'metric';
+        s.unitSystem = C.validSystem(f.unitSystem);
         Object.keys(s.values).forEach(function (k) { if (f[k] !== undefined) s.values[k] = typeof s.values[k] === 'boolean' ? !!f[k] : String(f[k]); });
         s.conditions = Array.isArray(f.conditions) ? f.conditions.map(String) : [];
         s.obstacles = (f.obstacles || []).map(function (o) { return { name: String(o.name || ''), x: String(o.x || ''), y: String(o.y || ''), w: String(o.w || ''), d: String(o.d || '') }; });
@@ -912,7 +996,7 @@
     state = fresh(); syncHeader(); render();
   }
   function syncHeader() {
-    $$('input[name="units"]').forEach(function (r) { r.checked = r.value === state.unitSystem; });
+    $$('input[name="units"]').forEach(function (r) { r.checked = r.value === state.unitSystem; }); syncUnitLabel();
     $('#advToggle').checked = state.advanced;
   }
 
@@ -922,13 +1006,18 @@
     var m = C.toMetric(kind, n, from), out = C.fromMetric(kind, m, to);
     return String(+out.toFixed(3));
   }
+  function syncUnitLabel() {
+    var el = $('#unitNow'); if (el) el.textContent = { metric: 'm + mm', imperial: 'ft + in', mm: 'mm only', m: 'm only', ft: 'ft only', 'in': 'in only' }[state.unitSystem] || 'm + mm';
+    $$('input[name="units"]').forEach(function (r) { r.checked = r.value === state.unitSystem; });
+    var up = $('#unitPanel'); if (up && ['mm', 'm', 'ft', 'in'].indexOf(state.unitSystem) < 0) up.classList.remove('on'); else if (up) up.classList.add('on');
+  }
   function switchUnits(to) {
     var from = state.unitSystem; if (from === to) return;
     Object.keys(state.values).forEach(function (k) { var kind = C.FIELD_KINDS[k]; if (kind && kind !== 'num' && kind !== 'weight') state.values[k] = convertStr(state.values[k], kind, from, to); });
     state.obstacles.forEach(function (o) { ['x', 'y', 'w', 'd'].forEach(function (k) { o[k] = convertStr(o[k], 'm', from, to); }); });
     state.equipment.forEach(function (q) { Object.keys(C.EQUIP_KINDS).forEach(function (k) { q[k] = convertStr(q[k], 'mm', from, to); }); });
     state.segments.forEach(function (s) { Object.keys(C.SEGMENT_KINDS).forEach(function (k) { var kind = C.SEGMENT_KINDS[k]; if (kind !== 'deg') s[k] = convertStr(s[k], kind, from, to); }); });
-    state.unitSystem = to; render(false);
+    state.unitSystem = to; syncUnitLabel(); render(false);
   }
 
   /* ---------------------------------------------------------- layout changes */
@@ -947,6 +1036,8 @@
     form.addEventListener('input', onInput); form.addEventListener('change', onChange);
     form.addEventListener('submit', function (e) { e.preventDefault(); next(); });
     document.addEventListener('click', onClick);
+    document.addEventListener('change', function (e) { var t = e.target; if (t.getAttribute && t.getAttribute('data-fix') && !(t.closest && t.closest('form'))) fixApply(t); });
+    document.addEventListener('input', function (e) { var t = e.target; if (t.getAttribute && t.getAttribute('data-hydlift') !== null && !(t.closest && t.closest('form'))) hydSlide(t); });
     document.addEventListener('input', function (e) { var c = e.target.getAttribute && e.target.getAttribute('data-contact'); if (c) { state.contact[c] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; } });
     document.addEventListener('change', function (e) { var c = e.target.getAttribute && e.target.getAttribute('data-contact'); if (c) state.contact[c] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; });
     document.addEventListener('submit', function (e) { if (e.target.id === 'enqForm') onSubmitEnquiry(e); });
@@ -987,6 +1078,7 @@
   }
   function onChange(e) {
     var t = e.target; state.dirty = true;
+    if (t.getAttribute && t.getAttribute('data-fix')) { fixApply(t); return; }
     if (t.getAttribute('data-name') === 'layout') { applyLayout(t.value); if (state.step === 4) { $('#routeBox').innerHTML = routeHtml(); } return; }
     var n = t.getAttribute('data-name'); if (n && t.tagName === 'SELECT') { state.values[n] = t.value; if (state.suggested[n]) delete state.suggested[n]; live(); }
     if (n === 'weight' || n === 'weightUnit') autoFromWeight();

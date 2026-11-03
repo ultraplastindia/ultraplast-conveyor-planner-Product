@@ -197,6 +197,19 @@
     var lines = wrap(s, maxW, size, opts.bold);
     for (var i = 0; i < lines.length; i++) { this.ensure(lh); this.text(x, this.y + size, lines[i], size, opts.bold, opts.color); this.y += lh; }
   };
+  /** Diagonal DOUBLE-LAYER watermark under the page content: layer 1 grey, layer 2 brand red, offset, each tile = wordmark + full company name. */
+  function watermarkOps(pdf, name) {
+    name = String(name || 'Ultraplast Chainbelts Private Limited').toUpperCase();
+    var c = Math.cos(35 * Math.PI / 180), sn = Math.sin(35 * Math.PI / 180), ops = ['q ' + f2(c) + ' ' + f2(sn) + ' ' + f2(-sn) + ' ' + f2(c) + ' 0 0 cm'];
+    var wmW = 11 * 0.62 * 30 + 12 + name.length * 0.62 * 15;       // approx. tile width in points
+    [[0.915, 0.915, 0.915, 0, 0], [0.985, 0.9, 0.91, wmW / 2 + 20, 46]].forEach(function (L, li) {
+      for (var v = -980 + L[4]; v < 980; v += 92) for (var u = -760 - L[3] % 40 + L[3]; u < 1020; u += wmW + 40) {
+        ops.push('BT /F2 30 Tf ' + L[0] + ' ' + L[1] + ' ' + L[2] + ' rg ' + f2(u) + ' ' + f2(v) + ' Td (ULTRAPLAST) Tj ET');
+        ops.push('BT /F2 15 Tf ' + L[0] + ' ' + L[1] + ' ' + L[2] + ' rg ' + f2(u + 11 * 0.62 * 30 + 12) + ' ' + f2(v + 4) + ' Td (' + esc(sanitize(name)) + ') Tj ET');
+      }
+    });
+    ops.push('Q'); return ops.join('\n');
+  }
   Pdf.prototype.bytes = function (footerText) {
     var objs = [], self = this, total = this.pages.length;
     function add(s) { objs.push(s); return objs.length; }
@@ -207,6 +220,7 @@
     var kids = [];
     this.pages.forEach(function (ops, idx) {
       var head = [];
+      head.push(watermarkOps(self, footerText.wm));
       head.push('0.78 0.06 0.18 rg 0 ' + f2(self.H - 22) + ' ' + f2(self.W) + ' 22 re f');
       head.push('1 1 1 rg BT /F2 10 Tf ' + f2(self.M) + ' ' + f2(self.H - 15) + ' Td (' + esc(sanitize(footerText.head)) + ') Tj ET');
       head.push('0.45 0.45 0.45 rg BT /F1 7 Tf ' + f2(self.M) + ' 24 Td (' + esc(sanitize(footerText.foot)) + ') Tj ET');
@@ -266,7 +280,7 @@
       pdf.ensure(46); pdf.y += 4; pdf.para(sec.title, 12, { bold: true, color: RED }); pdf.y += 2;
       drawRows(pdf, sec, W);
     });
-    return pdf.bytes({ head: m.title + ' - ' + m.project, foot: 'Preliminary estimate only - not a quotation. ' + m.website });
+    return pdf.bytes({ head: m.title + ' - ' + m.project, foot: 'Preliminary estimate only - not a quotation. ' + m.website, wm: m.company });
   }
 
   function drawRows(pdf, sec, W) {

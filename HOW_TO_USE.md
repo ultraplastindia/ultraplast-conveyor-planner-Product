@@ -30,5 +30,21 @@ The live 3D view, the results 3D view and every drawing show the item at that pl
 
 The tool does not select or size cylinders, pumps, capacity or locking. Those sizes are placeholders; engineering review is required.
 
+## Units panel (mm, m, ft, inch)
+
+Beside the Metric / Imperial buttons in the header is a **Units** panel. Choose **Millimetres**, **Metres**, **Feet** or **Inches** and every length, height, radius and rise (entry boxes, results, 3D labels, PDF report) uses that one unit; your typed values are converted for you. Metric (m and mm) and Imperial (ft and in) still work as before. The drawing files (DXF / SVG) always stay in millimetres, the normal AutoCAD unit.
+
+## Wrong measurement? Fix it on the results page
+
+Above the 3D conveyor there is a **Wrong measurement?** box with the route length, each segment's length, turn angle, radius, incline run, rise and angle, plus inlet height, discharge height and belt width. Type the corrected value and press Enter: the 3D conveyor, drawings, results and PDF are recalculated at once. On an incline, changing the angle recalculates the rise and changing the rise recalculates the angle.
+
+## Print watermark
+
+Anything you print (browser Print or Save as PDF) carries a light diagonal **double-layer watermark** of the company full name and logo on every page. The downloaded PDF report and the SVG drawing sheets carry the same watermark (the PDF uses the ULTRAPLAST wordmark, because the logo image cannot be embedded there).
+
+## Hydraulic stand: advanced 3D
+
+Each stand has twin cylinders with a trunnion foot, head flange, chrome rod with extension scale bands and a **safety lock collar**, a **telescopic guide pillar** beside each cylinder with 50 mm scale ticks, base plates and anchor bolts, two hose circuits with clamps, and a **Hand pump** (handle, gauge, release knob, relief valve) or an **Electric power pack** with motor, valve block and an up / down pendant. Choose the pump unit on the segment row. In the lift panel, **Auto up / down (demo)** moves the section by itself so you can watch the stands extend and retract. All sizes are placeholders; nothing is selected or sized.
+
 ## Drawings: export everything together
 On the results page the drawing card has **Download ALL drawings together (DXF for AutoCAD)**. One file holds the plan, floor layout, side elevation, end view, the equipment and route schedules, the title block and the 3D model (to the right of the 2D layout). Everything is full size in millimetres. **Download all sheets (SVG)** gives the same as two A3 sheets. Dimensions are lines and text (not editable AutoCAD dimension objects); the tests check that every dimension's length equals the number printed on it.

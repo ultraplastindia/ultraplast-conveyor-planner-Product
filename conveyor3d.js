@@ -252,77 +252,118 @@
     });
 
     /* ----- hydraulic adjustable stands under incline / decline segments (indicative; sizes are placeholders, never a selection) ----- */
-    sc.hyd = []; sc.hydPump = []; sc.hydPivots = []; sc.hydK = { plate: 0.11, tubeR: 0.042, rodR: 0.026, pumpHL: 0.13, pumpHW: 0.09 };
+    sc.hyd = []; sc.hydPump = []; sc.hydPivots = []; sc.hydK = { plate: 0.11, tubeR: 0.042, rodR: 0.026, pumpHL: 0.13, pumpHW: 0.09, guide: 0.11, sleeve: 0.025, colR: 0.018 };
     (function () {
       if (!hydSeg.length) return;
-      var HY = { tube: [28, 78, 142], collar: [20, 52, 100], rod: [214, 218, 224], base: [44, 48, 58], pump: [226, 122, 32], hose: [26, 26, 30], tubeR: 0.042, rodR: 0.026, tubeLen: 0.30 };
-      var push = function (q) { sc.polys.push(q); }, O = { tag: 'hyd' }, no = 0, off = hw + thk / 2;
+      var HY = { tube: [28, 78, 142], collar: [20, 52, 100], rod: [214, 218, 224], base: [44, 48, 58], steel: [150, 156, 164], sleeve: [92, 100, 114], lock: [238, 196, 38], knob: [200, 30, 40], hose: [26, 26, 30], hose2: [38, 70, 128], pump: [226, 122, 32], tank: [58, 66, 80], motor: [28, 84, 176], dark: [30, 30, 34], tubeR: 0.042, rodR: 0.026, tubeLen: 0.30, guide: 0.11, sl: 0.025, col: 0.018 };
+      var push = function (q) { sc.polys.push(q); }, O = { tag: 'hyd' }, OS = { tag: 'hyd', skipBottom: true }, no = 0, off = hw + thk / 2, UP = [0, 0, 1];
       function bar(a, b, r, color) { var dv = sub(b, a), Ln = len(dv); if (Ln < 1e-6) return; var t = norm(dv), up = Math.abs(t[2]) > 0.95 ? [1, 0, 0] : [0, 0, 1], l = norm(cross(up, t)), u = cross(t, l); obox(a, t, l, u, [0, Ln], [-r, r], [-r, r], color, O).forEach(push); }
-      function vcyl(x, y, z0, z1, R, color) { cylinder({ p: [x, y, 0], t: [1, 0, 0], l: [0, 0, 1], u: [0, 1, 0] }, R, z0, z1, color, O).forEach(push); }
-      hydSeg.forEach(function (d, k) {
-        var s0 = track.cum[d.p0], s1 = track.cum[d.p1], lowStart = d.rise >= 0, cnt = d.hydCount || 1, fr = cnt === 1 ? [0.85] : cnt === 2 ? [0.9, 0.5] : [0.9, 0.62, 0.34], pumpDone = false, segNo = details.indexOf(d) + 1, ports = [];
+      function vcyl(x, y, z0, z1, R, color) { if (z1 - z0 < 1e-4) return; cylinder({ p: [x, y, 0], t: [1, 0, 0], l: [0, 0, 1], u: [0, 1, 0] }, R, z0, z1, color, O).forEach(push); }
+      function bx(p, tH, lH, rt, rl, ru, color, skipBottom) { obox(p, tH, lH, UP, rt, rl, ru, color, skipBottom ? OS : O).forEach(push); }
+      hydSeg.forEach(function (d) {
+        var s0 = track.cum[d.p0], s1 = track.cum[d.p1], lowStart = d.rise >= 0, cnt = d.hydCount || 1, fr = cnt === 1 ? [0.85] : cnt === 2 ? [0.9, 0.5] : [0.9, 0.62, 0.34], pumpDone = false, segNo = details.indexOf(d) + 1, ports = [], electric = d.hydPump === 'electric';
         var sLow = lowStart ? s0 : s1, pivot = track.at(sLow);
         // pivot (hinge) at the low end: pin through two brackets, so the section turns when the stands raise or lower the high end
         (function () {
           var tH = norm([pivot.tx, pivot.ty, 0]), lH = [-tH[1], tH[0], 0], zp = pivot.z - fd * Math.sqrt(Math.max(0, 1 - pivot.tz * pivot.tz)) * 0.5;
           if (zp < 0.05) return;
           sc.hydPivots.push({ seg: segNo, s: sLow, x: pivot.x, y: pivot.y, z: zp });
-          cylinder({ p: [pivot.x, pivot.y, zp], t: tH, l: lH, u: [0, 0, 1] }, 0.014, -off - 0.045, off + 0.045, HY.rod, O).forEach(push);
+          cylinder({ p: [pivot.x, pivot.y, zp], t: tH, l: lH, u: UP }, 0.014, -off - 0.045, off + 0.045, HY.rod, O).forEach(push);
           [1, -1].forEach(function (sg) {
             var pp = [pivot.x + lH[0] * off * sg, pivot.y + lH[1] * off * sg, 0];
-            obox(pp, tH, lH, [0, 0, 1], [-0.04, 0.04], [-0.008, 0.008], [Math.max(0, zp - 0.07), zp + 0.07], HY.base, O).forEach(push);
-            obox(pp, tH, lH, [0, 0, 1], [-0.09, 0.09], [-0.07, 0.07], [0, 0.01], HY.base, { tag: 'hyd', skipBottom: true }).forEach(push);
+            bx(pp, tH, lH, [-0.04, 0.04], [-0.008, 0.008], [Math.max(0, zp - 0.07), zp + 0.07], HY.base);
+            bx(pp, tH, lH, [-0.09, 0.09], [-0.07, 0.07], [0, 0.01], HY.base, true);
+            vcyl(pp[0] + lH[0] * sg * 0.02, pp[1] + lH[1] * sg * 0.02, zp - 0.012, zp + 0.012, 0.02, HY.steel);                  // pin retaining washer
           });
         })();
         fr.forEach(function (u, j) {
-          var sP = lowStart ? s0 + (s1 - s0) * u : s1 - (s1 - s0) * u, pt = track.at(sP), tH = norm([pt.tx, pt.ty, 0]), lH = [-tH[1], tH[0], 0], uu = [0, 0, 1], P0 = [pt.x, pt.y, 0];
+          var sP = lowStart ? s0 + (s1 - s0) * u : s1 - (s1 - s0) * u, pt = track.at(sP), tH = norm([pt.tx, pt.ty, 0]), lH = [-tH[1], tH[0], 0], P0 = [pt.x, pt.y, 0];
           var zb = pt.z - fd * Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz)), H = zb - 0.05;
           if (H < 0.12) { sc.notes.push('A hydraulic stand on segment ' + segNo + ' is too low to draw (under ' + fmtMm(120) + ' to the frame).'); return; }
           no++;
-          var tubeTop = Math.min(0.012 + HY.tubeLen, H - 0.05), rodTop = H - 0.016;
-          // saddle cross-beam under the frame
-          obox(P0, tH, lH, uu, [-0.05, 0.05], [-off - 0.03, off + 0.03], [zb - 0.05, zb - 0.02], HY.base, O).forEach(push);
+          var tubeTop = Math.min(0.012 + HY.tubeLen, H - 0.05), rodTop = H - 0.016, rodLen = Math.max(0, rodTop - tubeTop), sleeveTop = Math.max(0.1, Math.min(tubeTop * 0.92, H - 0.12));
+          bx(P0, tH, lH, [-0.05, 0.05], [-off - HY.guide - 0.03, off + HY.guide + 0.03], [zb - 0.05, zb - 0.02], HY.base);   // saddle cross-beam under the frame (spans both guide pillars)
           [1, -1].forEach(function (sg) {
-            var cx = pt.x + lH[0] * off * sg, cy = pt.y + lH[1] * off * sg, pp = [cx, cy, 0];
-            obox(pp, tH, lH, uu, [-0.11, 0.11], [-0.11, 0.11], [0, 0.012], HY.base, { tag: 'hyd', skipBottom: true }).forEach(push);          // base plate
-            [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (q) { obox(pp, tH, lH, uu, [q[0] * 0.082 - 0.011, q[0] * 0.082 + 0.011], [q[1] * 0.082 - 0.011, q[1] * 0.082 + 0.011], [0.012, 0.024], [150, 156, 164], { tag: 'hyd', skipBottom: true }).forEach(push); });   // anchor bolt heads
-            vcyl(cx, cy, 0.012, 0.05, HY.tubeR + 0.012, HY.base);                                                                                // cylinder foot
-            vcyl(cx, cy, 0.05, tubeTop, HY.tubeR, HY.tube);                                                                                      // barrel
-            vcyl(cx, cy, tubeTop - 0.05, tubeTop, HY.tubeR + 0.007, HY.collar);                                                                  // gland / head
-            vcyl(cx, cy, tubeTop, rodTop, HY.rodR, HY.rod);                                                                                      // chrome piston rod
-            obox(pp, tH, lH, uu, [-0.07, 0.07], [-0.055, 0.055], [rodTop, H], HY.base, O).forEach(push);                                        // rod-end saddle
-            obox([cx + lH[0] * sg * (HY.tubeR + 0.022), cy + lH[1] * sg * (HY.tubeR + 0.022), 0], tH, lH, uu, [-0.016, 0.016], [-0.016, 0.016], [0.04, 0.08], HY.hose, O).forEach(push);   // oil port
-            [0.13, 0.20].forEach(function (zr) { vcyl(cx, cy, zr, zr + 0.012, HY.tubeR + 0.003, HY.collar); });                                  // bands
-            if (H - tubeTop > 0.06) { var gx = cx, gy = cy; vcyl(gx, gy, tubeTop, tubeTop + 0.002, HY.rodR + 0.006, HY.rod); }                  // wiper ring
+            var cx = pt.x + lH[0] * off * sg, cy = pt.y + lH[1] * off * sg, pp = [cx, cy, 0], gx = cx + lH[0] * sg * HY.guide, gy = cy + lH[1] * sg * HY.guide, pg = [gx, gy, 0];
+            bx(pp, tH, lH, [-0.11, 0.11], [-0.11, 0.11], [0, 0.012], HY.base, true);                                                                 // base plate
+            [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (q) { bx(pp, tH, lH, [q[0] * 0.082 - 0.011, q[0] * 0.082 + 0.011], [q[1] * 0.082 - 0.011, q[1] * 0.082 + 0.011], [0.012, 0.024], HY.steel, true); });   // anchor bolts
+            [-1, 1].forEach(function (e) { bx(pp, tH, lH, [-0.034, 0.034], [e * (HY.tubeR + 0.012) - 0.006, e * (HY.tubeR + 0.012) + 0.006], [0.012, 0.078], HY.base); });   // foot clevis plates
+            cylinder({ p: [cx, cy, 0.046], t: tH, l: lH, u: UP }, 0.009, -(HY.tubeR + 0.026), HY.tubeR + 0.026, HY.steel, O).forEach(push);          // foot pivot pin
+            vcyl(cx, cy, 0.012, 0.05, HY.tubeR + 0.012, HY.base);                                                                                    // cylinder foot / cap end
+            vcyl(cx, cy, 0.05, tubeTop, HY.tubeR, HY.tube);                                                                                          // barrel
+            [0.13, 0.2].forEach(function (zr) { if (zr < tubeTop - 0.06) vcyl(cx, cy, zr, zr + 0.012, HY.tubeR + 0.003, HY.collar); });             // tie-rod bands
+            vcyl(cx, cy, tubeTop - 0.075, tubeTop - 0.05, HY.tubeR + 0.02, HY.steel);                                                                // head flange
+            [0, 1, 2, 3].forEach(function (q) { var a = q * Math.PI / 2 + Math.PI / 4, px = cx + (tH[0] * Math.cos(a) + lH[0] * Math.sin(a)) * (HY.tubeR + 0.012), py = cy + (tH[1] * Math.cos(a) + lH[1] * Math.sin(a)) * (HY.tubeR + 0.012); vcyl(px, py, tubeTop - 0.082, tubeTop - 0.075, 0.007, HY.dark); });   // flange bolts
+            vcyl(cx, cy, tubeTop - 0.05, tubeTop, HY.tubeR + 0.007, HY.collar);                                                                      // gland / head
+            vcyl(cx, cy, tubeTop, rodTop, HY.rodR, HY.rod);                                                                                          // chrome piston rod
+            var nb = Math.min(10, Math.floor(rodLen / 0.05)); for (var q = 0; q < nb; q++) vcyl(cx, cy, tubeTop + 0.03 + q * 0.05, tubeTop + 0.038 + q * 0.05, HY.rodR + 0.0015, HY.dark);   // extension scale bands on the rod
+            if (rodLen > 0.1) { vcyl(cx, cy, tubeTop + 0.012, tubeTop + 0.03, HY.rodR + 0.016, HY.lock); [1, -1].forEach(function (e) { bx([cx + tH[0] * e * (HY.rodR + 0.024), cy + tH[1] * e * (HY.rodR + 0.024), 0], tH, lH, [-0.008, 0.008], [-0.008, 0.008], [tubeTop + 0.015, tubeTop + 0.028], HY.knob); }); }   // safety lock collar + two lock knobs
+            bx([cx, cy, 0], tH, lH, [-0.032, 0.032], [-0.02, 0.02], [rodTop - 0.034, rodTop + 0.002], HY.steel);                                      // rod-end eye
+            cylinder({ p: [cx, cy, rodTop - 0.016], t: tH, l: lH, u: UP }, 0.008, -0.044, 0.044, HY.dark, O).forEach(push);                           // rod-end pin
+            bx(pp, tH, lH, [-0.07, 0.07], [-0.055, 0.055], [rodTop, H], HY.base);                                                                    // rod-end saddle
+            bx([cx + lH[0] * sg * (HY.tubeR + 0.022), cy + lH[1] * sg * (HY.tubeR + 0.022), 0], tH, lH, [-0.016, 0.016], [-0.016, 0.016], [0.04, 0.08], HY.hose);        // cap-end port
+            bx([cx + lH[0] * sg * (HY.tubeR + 0.022), cy + lH[1] * sg * (HY.tubeR + 0.022), 0], tH, lH, [-0.014, 0.014], [-0.014, 0.014], [tubeTop - 0.052, tubeTop - 0.02], HY.hose2);   // rod-end port
+            /* telescopic guide pillar beside each cylinder: holds the section square and stops it twisting; scale ticks show the lift */
+            bx(pg, tH, lH, [-0.06, 0.06], [-0.06, 0.06], [0, 0.012], HY.base, true);
+            bx(pg, tH, lH, [-HY.sl, HY.sl], [-HY.sl, HY.sl], [0.012, sleeveTop], HY.sleeve);                                                         // outer sleeve
+            bx(pg, tH, lH, [-HY.sl - 0.006, HY.sl + 0.006], [-HY.sl - 0.006, HY.sl + 0.006], [sleeveTop - 0.025, sleeveTop], HY.base);               // sleeve cap
+            bx(pg, tH, lH, [-HY.col, HY.col], [-HY.col, HY.col], [sleeveTop - 0.12, H - 0.016], HY.steel);                                           // inner sliding column
+            bx(pg, tH, lH, [-0.05, 0.05], [-0.05, 0.05], [H - 0.016, H], HY.base);                                                                   // column top plate
+            var nt = Math.min(8, Math.floor((sleeveTop - 0.06) / 0.05)); for (var qq = 0; qq < nt; qq++) bx(pg, tH, lH, [-0.014, 0.014], sg > 0 ? [HY.sl, HY.sl + 0.004] : [-HY.sl - 0.004, -HY.sl], [0.05 + qq * 0.05, 0.054 + qq * 0.05], HY.dark);   // scale ticks every 50 mm
+            bx(pp, tH, lH, [-0.012, 0.012], sg > 0 ? [HY.tubeR, HY.guide - HY.sl] : [-(HY.guide - HY.sl), -HY.tubeR], [0.14, 0.16], HY.base);       // brace plate cylinder to sleeve
+            // rod-end hose rising up the outside of the cylinder, with clamps
+            var hxr = cx + lH[0] * sg * (HY.tubeR + 0.034), hyr = cy + lH[1] * sg * (HY.tubeR + 0.034);
+            bar([hxr, hyr, 0.04], [hxr, hyr, tubeTop - 0.036], 0.008, HY.hose2);
+            [0.1, 0.22].forEach(function (zc) { if (zc < tubeTop - 0.07) vcyl(hxr, hyr, zc, zc + 0.012, 0.015, HY.steel); });
           });
-          obox(P0, tH, lH, uu, [-0.012, 0.012], [-off + HY.tubeR, off - HY.tubeR], [tubeTop * 0.45 - 0.012, tubeTop * 0.45 + 0.012], HY.base, O).forEach(push);   // cross brace
-          var sgP = 1, near = [pt.x + lH[0] * off * sgP, pt.y + lH[1] * off * sgP, 0.06];
-          ports.push({ p: [near[0] + lH[0] * (HY.tubeR + 0.022), near[1] + lH[1] * (HY.tubeR + 0.022), 0.06], far: [pt.x - lH[0] * off - lH[0] * (HY.tubeR + 0.022), pt.y - lH[1] * off - lH[1] * (HY.tubeR + 0.022), 0.06] });
-          var rec = { n: no, id: 'H' + no, seg: segNo, s: sP, x: pt.x, y: pt.y, zb: zb, heightM: H, tubeTopM: tubeTop, rodM: Math.max(0, rodTop - tubeTop), offM: off, t: tH, l: lH, strokeMm: d.hydStrokeMm || null, rating: d.hydRating || '', count: cnt, decline: !lowStart, posFrac: u, beltZ: pt.z };
+          bx(P0, tH, lH, [-0.012, 0.012], [-off + HY.tubeR, off - HY.tubeR], [tubeTop * 0.45 - 0.012, tubeTop * 0.45 + 0.012], HY.base);              // cross brace between the cylinders
+          var sgP = 1, ofx = HY.tubeR + 0.034;
+          ports.push({ p: [pt.x + lH[0] * (off + ofx), pt.y + lH[1] * (off + ofx), 0.06], far: [pt.x - lH[0] * (off + ofx), pt.y - lH[1] * (off + ofx), 0.06] });
+          var rec = { n: no, id: 'H' + no, seg: segNo, s: sP, x: pt.x, y: pt.y, zb: zb, heightM: H, tubeTopM: tubeTop, rodM: rodLen, offM: off, t: tH, l: lH, strokeMm: d.hydStrokeMm || null, rating: d.hydRating || '', count: cnt, decline: !lowStart, posFrac: u, beltZ: pt.z, pump: electric ? 'electric' : 'hand', guideM: HY.guide, sleeveTopM: sleeveTop };
           sc.hyd.push(rec);
-          tag([pt.x + lH[0] * (off + 0.28), pt.y + lH[1] * (off + 0.28), H * (0.62 - 0.22 * j)], 'H' + no + ' Hydraulic stand' + (d.hydRating ? ' · ' + d.hydRating : '') + (d.hydStrokeMm ? ' · stroke ' + fmtMm(d.hydStrokeMm) : ''), d.hydRating || d.hydStrokeMm ? 'entered' : 'ind', 'H' + no);
-          if (detail) dim([pt.x + lH[0] * (off + 0.16), pt.y + lH[1] * (off + 0.16), 0], [pt.x + lH[0] * (off + 0.16), pt.y + lH[1] * (off + 0.16), H], 'H' + no + ' height ' + fmtMm(H * 1000), 'calc', { off: [8, 0] });
-          grow(clo, chi, [pt.x - 0.3, pt.y - 0.3, 0]); grow(clo, chi, [pt.x + 0.3, pt.y + 0.3, H]); grow(lo, hi, [pt.x - 0.3, pt.y - 0.3, 0]); grow(lo, hi, [pt.x + 0.3, pt.y + 0.3, H]);
-          if (!pumpDone) {   // hand pump unit beside the first stand of the segment, with hoses to every cylinder
+          tag([pt.x + lH[0] * (off + 0.3), pt.y + lH[1] * (off + 0.3), H * (0.62 - 0.22 * j)], 'H' + no + ' Hydraulic stand' + (d.hydRating ? ' · ' + d.hydRating : '') + (d.hydStrokeMm ? ' · stroke ' + fmtMm(d.hydStrokeMm) : ''), d.hydRating || d.hydStrokeMm ? 'entered' : 'ind', 'H' + no);
+          if (detail) dim([pt.x + lH[0] * (off + 0.18), pt.y + lH[1] * (off + 0.18), 0], [pt.x + lH[0] * (off + 0.18), pt.y + lH[1] * (off + 0.18), H], 'H' + no + ' height ' + fmtMm(H * 1000), 'calc', { off: [8, 0] });
+          grow(clo, chi, [pt.x - 0.35, pt.y - 0.35, 0]); grow(clo, chi, [pt.x + 0.35, pt.y + 0.35, H]); grow(lo, hi, [pt.x - 0.35, pt.y - 0.35, 0]); grow(lo, hi, [pt.x + 0.35, pt.y + 0.35, H]);
+          if (!pumpDone) {   // pump unit beside the first stand of the segment: hand pump, or electric power pack with an up / down pendant
             pumpDone = true;
-            var pc = [pt.x + lH[0] * (off + 0.55), pt.y + lH[1] * (off + 0.55), 0];
-            obox(pc, tH, lH, uu, [-0.13, 0.13], [-0.09, 0.09], [0, 0.2], HY.pump, O).forEach(push);
-            obox(pc, tH, lH, uu, [-0.14, 0.14], [-0.10, 0.10], [0.2, 0.22], HY.base, O).forEach(push);
-            obox(pc, tH, lH, uu, [-0.15, 0.15], [-0.11, 0.11], [0, 0.012], HY.base, { tag: 'hyd', skipBottom: true }).forEach(push);
-            cylinder({ p: [pc[0], pc[1], 0.15], t: lH, l: tH, u: uu }, 0.034, 0.13, 0.15, [240, 240, 236], O).forEach(push);   // pressure gauge
-            var hb = [pc[0] + tH[0] * 0.07, pc[1] + tH[1] * 0.07, 0.22];
-            bar(hb, [hb[0] + lH[0] * 0.26, hb[1] + lH[1] * 0.26, 0.5], 0.011, HY.base);                                                       // pump handle
-            bar([hb[0] + lH[0] * 0.26 - tH[0] * 0.09, hb[1] + lH[1] * 0.26 - tH[1] * 0.09, 0.5], [hb[0] + lH[0] * 0.26 + tH[0] * 0.09, hb[1] + lH[1] * 0.26 + tH[1] * 0.09, 0.5], 0.016, HY.hose);   // grip
-            sc.hydPump.push({ seg: segNo, x: pc[0], y: pc[1], t: tH, l: lH });
-            ports.pump = [pc[0] - lH[0] * 0.09, pc[1] - lH[1] * 0.09, 0.07];
-            tag([pc[0], pc[1], 0.4], 'Hand pump (indicative)', 'ind', 'HP');
-            grow(clo, chi, [pc[0] - 0.3, pc[1] - 0.3, 0]); grow(clo, chi, [pc[0] + 0.3, pc[1] + 0.3, 0.55]); grow(lo, hi, [pc[0] - 0.3, pc[1] - 0.3, 0]); grow(lo, hi, [pc[0] + 0.3, pc[1] + 0.3, 0.55]);
+            var pc = [pt.x + lH[0] * (off + 0.62), pt.y + lH[1] * (off + 0.62), 0], phl = electric ? 0.17 : 0.13, phw = electric ? 0.11 : 0.09;
+            bx(pc, tH, lH, [-phl - 0.01, phl + 0.01], [-phw - 0.01, phw + 0.01], [0, 0.012], HY.base, true);
+            if (!electric) {
+              bx(pc, tH, lH, [-0.13, 0.13], [-0.09, 0.09], [0.012, 0.2], HY.pump);                                                                    // reservoir
+              bx(pc, tH, lH, [-0.14, 0.14], [-0.10, 0.10], [0.2, 0.22], HY.base);
+              cylinder({ p: [pc[0], pc[1], 0.15], t: lH, l: tH, u: UP }, 0.034, 0.13, 0.15, [240, 240, 236], O).forEach(push);                       // pressure gauge
+              var hb = [pc[0] + tH[0] * 0.07, pc[1] + tH[1] * 0.07, 0.22];
+              bar(hb, [hb[0] + lH[0] * 0.26, hb[1] + lH[1] * 0.26, 0.5], 0.011, HY.base);                                                           // pump handle
+              bar([hb[0] + lH[0] * 0.26 - tH[0] * 0.09, hb[1] + lH[1] * 0.26 - tH[1] * 0.09, 0.5], [hb[0] + lH[0] * 0.26 + tH[0] * 0.09, hb[1] + lH[1] * 0.26 + tH[1] * 0.09, 0.5], 0.016, HY.hose);   // grip
+              bx([pc[0] - tH[0] * 0.07, pc[1] - tH[1] * 0.07, 0], tH, lH, [-0.035, 0.035], [-0.03, 0.03], [0.22, 0.26], HY.steel);                  // valve block
+              vcyl(pc[0] - tH[0] * 0.07, pc[1] - tH[1] * 0.07, 0.26, 0.3, 0.012, HY.knob);                                                           // lowering (release) valve knob
+              vcyl(pc[0] + tH[0] * 0.1, pc[1] + tH[1] * 0.1, 0.22, 0.27, 0.01, HY.steel);                                                            // relief valve
+            } else {
+              bx(pc, tH, lH, [-0.17, 0.17], [-0.11, 0.11], [0.012, 0.2], HY.tank);                                                                    // oil tank
+              cylinder({ p: [pc[0], pc[1], 0.265], t: lH, l: tH, u: UP }, 0.06, -0.15, 0.15, HY.motor, O).forEach(push);                           // electric motor (indicative, not selected)
+              cylinder({ p: [pc[0], pc[1], 0.265], t: lH, l: tH, u: UP }, 0.052, 0.15, 0.19, HY.dark, O).forEach(push);                            // fan cover
+              bx([pc[0] - tH[0] * 0.02, pc[1] - tH[1] * 0.02, 0], tH, lH, [-0.04, 0.04], [-0.035, 0.035], [0.325, 0.375], HY.dark);                 // terminal box
+              bx([pc[0] + tH[0] * 0.19, pc[1] + tH[1] * 0.19, 0], tH, lH, [-0.03, 0.03], [-0.05, 0.05], [0.04, 0.17], HY.steel);                   // valve block
+              cylinder({ p: [pc[0], pc[1], 0.14], t: lH, l: tH, u: UP }, 0.034, -0.19, -0.17, [240, 240, 236], O).forEach(push);                    // pressure gauge
+              var pend = [pc[0] - lH[0] * 0.42, pc[1] - lH[1] * 0.42, 0];
+              bar([pc[0] - tH[0] * 0.02, pc[1] - tH[1] * 0.02, 0.375], [pend[0], pend[1], 0.95], 0.007, HY.hose);                                    // control cable
+              bx(pend, tH, lH, [-0.05, 0.05], [-0.035, 0.035], [0.8, 0.95], HY.steel);                                                               // up / down pendant
+              bx([pend[0] - tH[0] * 0.052, pend[1] - tH[1] * 0.052, 0], tH, lH, [-0.004, 0.004], [-0.02, 0.02], [0.88, 0.92], [40, 160, 70]);          // UP button
+              bx([pend[0] - tH[0] * 0.052, pend[1] - tH[1] * 0.052, 0], tH, lH, [-0.004, 0.004], [-0.02, 0.02], [0.82, 0.86], HY.knob);                // DOWN button
+            }
+            sc.hydPump.push({ seg: segNo, x: pc[0], y: pc[1], t: tH, l: lH, type: electric ? 'electric' : 'hand', hl: phl, hw: phw });
+            ports.pump = [pc[0] - lH[0] * (phw + 0.01), pc[1] - lH[1] * (phw + 0.01), 0.07];
+            tag([pc[0], pc[1], electric ? 0.5 : 0.42], electric ? 'Electric power pack + pendant (indicative)' : 'Hand pump (indicative)', 'ind', 'HP');
+            grow(clo, chi, [pc[0] - 0.5, pc[1] - 0.5, 0]); grow(clo, chi, [pc[0] + 0.5, pc[1] + 0.5, 1.0]); grow(lo, hi, [pc[0] - 0.5, pc[1] - 0.5, 0]); grow(lo, hi, [pc[0] + 0.5, pc[1] + 0.5, 1.0]);
           }
         });
-        // hoses: pump -> each near cylinder, and across to the far cylinder (drawn as thin dark bars at floor level)
-        if (ports.pump) ports.forEach(function (pr) { bar(ports.pump, pr.p, 0.012, HY.hose); bar(pr.p, pr.far, 0.012, HY.hose); });
+        // hoses: two circuits (cap end and rod end) from the pump to every stand, then across to the far cylinder, at floor level with clamps
+        if (ports.pump) ports.forEach(function (pr, qi) {
+          bar(ports.pump, pr.p, 0.012, HY.hose); bar([ports.pump[0], ports.pump[1], 0.1], [pr.p[0], pr.p[1], 0.1], 0.009, HY.hose2);
+          bar(pr.p, pr.far, 0.012, HY.hose); bar([pr.p[0], pr.p[1], 0.1], [pr.far[0], pr.far[1], 0.1], 0.009, HY.hose2);
+        });
       });
-      sc.notes.push('Hydraulic stands are drawn as a pair of cylinders under the frame, with a hand pump and hoses. Their positions, cylinder, rod and pump sizes are placeholders: this tool does not select or size cylinders, pumps, load capacity or locking. Stand height is calculated from the route.');
+      sc.notes.push('Hydraulic stands are drawn as a pair of cylinders with a guide pillar each, base plates, a safety lock collar, hoses and a pump (hand pump or electric power pack). Positions and all cylinder, rod, guide, pump and motor sizes are placeholders: this tool does not select or size cylinders, pumps, motors, load capacity or locking. Stand height is calculated from the route.');
     })();
 
     /* ----- drive motor, sensors and other equipment placed by the user ----- */

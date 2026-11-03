@@ -67,12 +67,27 @@
     return Number(s);
   }
 
+  /* Measurement systems. metric / imperial are the original mixed systems (large lengths in m or ft, small sizes in mm or in).
+   * mm, m, ft and in use that ONE unit for every length. Values are always converted to metres / millimetres internally. */
+  var UNIT_SYSTEMS = { metric: { m: 'm', mm: 'mm' }, imperial: { m: 'ft', mm: 'in' }, mm: { m: 'mm', mm: 'mm' }, m: { m: 'm', mm: 'm' }, ft: { m: 'ft', mm: 'ft' }, 'in': { m: 'in', mm: 'in' } };
+  var UNIT_LABELS = { metric: 'Metric (m and mm)', mm: 'Millimetres (mm)', m: 'Metres (m)', imperial: 'Imperial (ft and in)', ft: 'Feet (ft)', 'in': 'Inches (in)' };
+  var IN_METRES = 0.0254;
+  function validSystem(sys) { return Object.prototype.hasOwnProperty.call(UNIT_SYSTEMS, sys) ? sys : 'metric'; }
+  function unitFor(kind, sys) { var t = UNIT_SYSTEMS[validSystem(sys)]; return kind === 'm' ? t.m : kind === 'mm' ? t.mm : null; }
+  function isImperial(sys) { return sys === 'imperial' || sys === 'ft' || sys === 'in'; }
+  function lenToM(v, u) { return u === 'mm' ? v / 1000 : u === 'm' ? v : u === 'ft' ? v * M_PER_FT : v * IN_METRES; }
+  function lenFromM(m, u) { return u === 'mm' ? m * 1000 : u === 'm' ? m : u === 'ft' ? m / M_PER_FT : m / IN_METRES; }
   function toMetric(kind, v, sys) {
     if (v === null || v === undefined || isNaN(v)) return v;
-    if (sys !== 'imperial') return v;
+    sys = validSystem(sys);
+    if (kind === 'm' || kind === 'mm') {
+      if (sys === 'metric') return v;
+      if (sys === 'imperial') return kind === 'm' ? v * M_PER_FT : v * MM_PER_IN;
+      var u = unitFor(kind, sys), m = lenToM(v, u);
+      return kind === 'm' ? m : m * 1000;
+    }
+    if (!isImperial(sys)) return v;
     switch (kind) {
-      case 'm': return v * M_PER_FT;
-      case 'mm': return v * MM_PER_IN;
       case 'speed': return v * M_PER_FT;
       case 'temp': return (v - 32) * 5 / 9;
       default: return v;
@@ -80,10 +95,14 @@
   }
   function fromMetric(kind, v, sys) {
     if (v === null || v === undefined || isNaN(v)) return v;
-    if (sys !== 'imperial') return v;
+    sys = validSystem(sys);
+    if (kind === 'm' || kind === 'mm') {
+      if (sys === 'metric') return v;
+      if (sys === 'imperial') return kind === 'm' ? v / M_PER_FT : v / MM_PER_IN;
+      return lenFromM(kind === 'm' ? v : v / 1000, unitFor(kind, sys));
+    }
+    if (!isImperial(sys)) return v;
     switch (kind) {
-      case 'm': return v / M_PER_FT;
-      case 'mm': return v / MM_PER_IN;
       case 'speed': return v / M_PER_FT;
       case 'temp': return v * 9 / 5 + 32;
       default: return v;
@@ -105,7 +124,7 @@
    */
   function normalize(raw) {
     raw = raw || {};
-    var sys = raw.unitSystem === 'imperial' ? 'imperial' : 'metric';
+    var sys = validSystem(raw.unitSystem);
     var inp = { unitSystem: raw.unitSystem === undefined ? 'metric' : raw.unitSystem, _sys: sys };
     var k;
     for (k in raw) {
@@ -141,6 +160,7 @@
       r.hyd = r.type === 'incline' && (s.hyd === true || s.hyd === '1' || s.hyd === 1 || s.hyd === 'true');
       var hc = parseInt(s.hydCount, 10); r.hydCount = r.hyd ? (hc >= 1 && hc <= 3 ? hc : 1) : 0;
       r.hydRating = r.hyd ? String(s.hydRating || '').trim() : '';
+      r.hydPump = r.hyd && s.hydPump === 'electric' ? 'electric' : 'hand';
       return r;
     }).filter(function (s) {
       return !(s.length === null && s.angle === null && s.radius === null && s.horizontal === null && s.rise === null && s.inclineAngle === null && !s.hyd);
@@ -175,7 +195,7 @@
   function validate(inp) {
     var errors = [], warnings = [];
     function err(field, msg, step) { errors.push({ field: field, step: step || STEP_OF[field] || 0, msg: msg }); }
-    if (inp.unitSystem !== 'metric' && inp.unitSystem !== 'imperial') err('unitSystem', 'Unit system must be "metric" or "imperial".', 0);
+    if (!Object.prototype.hasOwnProperty.call(UNIT_SYSTEMS, inp.unitSystem)) err('unitSystem', 'Unit system must be one of: metric, imperial, mm, m, ft, in.', 0);
     ['weightUnit', 'maxWeightUnit'].forEach(function (u) {
       if (inp[u] !== undefined && WEIGHT_UNITS[inp[u]] === undefined) err(u === 'weightUnit' ? 'weight' : 'maxWeight', 'Unknown weight unit "' + inp[u] + '". Use g, kg, lb or oz.');
     });
@@ -309,7 +329,7 @@
         x += H * Math.cos(hr); y += H * Math.sin(hr); z += rise;
         L.inclined += len; L.total += len; L.horizontal += H;
         d.length = len; d.horizontal = H; d.rise = rise; d.angle = Math.atan2(rise, H) * 180 / Math.PI;
-        if (s.hyd) { d.hyd = true; d.hydCount = s.hydCount || 1; d.hydStrokeMm = s.hydStroke !== null && s.hydStroke !== undefined && !isNaN(s.hydStroke) && s.hydStroke > 0 ? s.hydStroke : null; d.hydRating = s.hydRating || ''; }
+        if (s.hyd) { d.hyd = true; d.hydCount = s.hydCount || 1; d.hydStrokeMm = s.hydStroke !== null && s.hydStroke !== undefined && !isNaN(s.hydStroke) && s.hydStroke > 0 ? s.hydStroke : null; d.hydRating = s.hydRating || ''; d.hydPump = s.hydPump === 'electric' ? 'electric' : 'hand'; }
         minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
       }
       d.p1 = pts.length - 1;
@@ -462,7 +482,7 @@
         out.missing.push('Complete data for segment ' + (path.incompleteIdx[0] + 1) + ' (' + segs[path.incompleteIdx[0]].type + ')');
       }
       out.hydraulic = path.details.filter(function (d) { return d.type === 'incline' && d.hyd; }).map(function (d) {
-        return { seg: d.index + 1, count: d.hydCount, strokeMm: d.hydStrokeMm, rating: d.hydRating, riseM: d.rise, horizontalM: d.horizontal, slopeDeg: d.angle, decline: d.rise < 0 };
+        return { seg: d.index + 1, count: d.hydCount, strokeMm: d.hydStrokeMm, rating: d.hydRating, pump: d.hydPump, riseM: d.rise, horizontalM: d.horizontal, slopeDeg: d.angle, decline: d.rise < 0 };
       });
       out.hydraulic.forEach(function (h) {
         if (Math.abs(h.riseM) < 0.01) issue('info', 'Segment ' + h.seg + ': a hydraulic stand is selected but this incline has almost no height change, so the stand has little to adjust.');
@@ -716,7 +736,7 @@
     })();
     if (out.hydraulic && out.hydraulic.length) {
       var hn = 0; out.hydraulic.forEach(function (h) { hn += h.count; });
-      add('Hydraulic adjustable stand(s) shown in the drawing', hn, 'stand(s)', out.hydraulic.map(function (h) { return 'Segment ' + h.seg + ' (' + (h.decline ? 'decline' : 'incline') + '): ' + h.count + ' stand(s)' + (h.strokeMm !== null ? ', stroke ' + round(h.strokeMm, 0) + ' mm' : ', stroke not entered') + (h.rating ? ', ' + h.rating : ', rating not entered'); }).join('; ') + '. Customer-stated only: cylinder, pump, capacity and locking are not selected or sized by this tool - engineering review required.', STATUS.CUSTOMER);
+      add('Hydraulic adjustable stand(s) shown in the drawing', hn, 'stand(s)', out.hydraulic.map(function (h) { return 'Segment ' + h.seg + ' (' + (h.decline ? 'decline' : 'incline') + '): ' + h.count + ' stand(s)' + (h.strokeMm !== null ? ', stroke ' + round(h.strokeMm, 0) + ' mm' : ', stroke not entered') + (h.rating ? ', ' + h.rating : ', rating not entered') + (h.pump === 'electric' ? ', electric power pack' : ', hand pump'); }).join('; ') + '. Customer-stated only: cylinder, pump, capacity and locking are not selected or sized by this tool - engineering review required.', STATUS.CUSTOMER);
     }
     if (inp.feeding === 'automated' || inp.discharge === 'automated' || (inp.accumulation && inp.accumulation !== 'none') || inp.upstream || inp.downstream) add('Sensors and controls', 'To be engineered', null, 'Suggested because of automated handling, accumulation or connected machines. Count depends on control philosophy.', STATUS.REVIEW);
     if (inp.guarding && inp.guarding !== 'none') add('Guards and safety accessories', 'To be engineered', null, 'Guarding level requested: ' + inp.guarding + '. Risk assessment required.', STATUS.REVIEW);
@@ -747,7 +767,7 @@
 
   return {
     STATUS: STATUS, FIELD_KINDS: FIELD_KINDS, SEGMENT_KINDS: SEGMENT_KINDS, OBSTACLE_KINDS: OBSTACLE_KINDS, EQUIP_TYPES: EQUIP_TYPES, EQUIP_KINDS: EQUIP_KINDS, LABELS: LABELS,
-    parseNum: parseNum, toMetric: toMetric, fromMetric: fromMetric, weightToKg: weightToKg, round: round,
+    parseNum: parseNum, UNIT_SYSTEMS: UNIT_SYSTEMS, UNIT_LABELS: UNIT_LABELS, unitFor: unitFor, isImperial: isImperial, lenToM: lenToM, lenFromM: lenFromM, validSystem: validSystem, toMetric: toMetric, fromMetric: fromMetric, weightToKg: weightToKg, round: round,
     normalize: normalize, validate: validate, requiredForStep: requiredForStep,
     buildPath: buildPath, segmentComplete: segmentComplete, segmentsFromInputs: segmentsFromInputs, recommend: recommend, analyse: analyse
   };

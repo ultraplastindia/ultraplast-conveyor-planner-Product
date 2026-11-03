@@ -21,6 +21,16 @@
           <label><input type="radio" name="units" value="metric" checked> Metric</label>
           <label><input type="radio" name="units" value="imperial"> Imperial</label>
         </fieldset>
+        <details class="unitpanel" id="unitPanel"><summary id="unitSummary" title="Measurement units panel: choose mm, m, ft or inch for every size">Units: <b id="unitNow">m + mm</b> &#9662;</summary>
+          <fieldset class="unitbox"><legend>Measurement units (all sizes)</legend>
+            <p class="note">Metric (m and mm) and Imperial (ft and in) are the two buttons beside this panel. Or use one single unit for everything:</p>
+            <label><input type="radio" name="units" value="mm"> Millimetres <small>mm only</small></label>
+            <label><input type="radio" name="units" value="m"> Metres <small>m only</small></label>
+            <label><input type="radio" name="units" value="ft"> Feet <small>ft only</small></label>
+            <label><input type="radio" name="units" value="in"> Inches <small>in only</small></label>
+            <p class="note">Every length, height, radius and rise on the screen, 3D view, results and PDF follows this choice. Drawings (DXF / SVG) stay in millimetres, the usual AutoCAD unit.</p>
+          </fieldset>
+        </details>
         <label class="chk sm"><input type="checkbox" id="advToggle"> <span>Advanced</span></label>
         <label class="btn ghost sm" id="importWrap" title="Load a project JSON you downloaded earlier">Load JSON<input type="file" id="importFile" accept="application/json,.json" hidden></label>
         <a class="btn ghost sm" href="catalogue.html" id="lnkCat" title="Browse the Ultraplast product catalogue and get part suggestions">Catalogue</a>
@@ -99,5 +109,6 @@
 <script src="cad.js"></script>
   <script src="catalogue.js"></script>
   <script src="app.js"></script>
+  <script src="watermark.js"></script>
 </body>
 </html>
