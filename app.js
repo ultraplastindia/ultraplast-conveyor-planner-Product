@@ -611,7 +611,7 @@
   var hydTimer = null, hydAuto = null;
   function hydAutoStop() { if (hydAuto) { clearInterval(hydAuto.t); hydAuto = null; } document.querySelectorAll('[data-hydauto]').forEach(function (b) { b.innerHTML = '&#9654; Auto up / down (demo)'; b.setAttribute('aria-pressed', 'false'); }); }
   function hydAutoStart(k) {
-    var dir = 1; hydAuto = { k: k, t: setInterval(function () { var el = document.querySelector('[data-hydlift="' + k + '"]'); if (!el) { hydAutoStop(); return; } var v = +el.value + 10 * dir; if (v >= +el.max) { v = +el.max; dir = -1; } else if (v <= +el.min) { v = +el.min; dir = 1; } el.value = v; hydSlide(el); }, 160) };
+    var dir = 1; hydAuto = { k: k, t: setInterval(function () { var el = document.querySelector('[data-hydlift="' + k + '"]'); if (!el) { hydAutoStop(); return; } var v = +el.value + Math.max(10, Math.round(+el.max / 40 / 5) * 5) * dir; if (v >= +el.max) { v = +el.max; dir = -1; } else if (v <= +el.min) { v = +el.min; dir = 1; } el.value = v; hydSlide(el); }, 160) };
     document.querySelectorAll('[data-hydauto="' + k + '"]').forEach(function (b) { b.innerHTML = '&#9632; Stop auto up / down'; b.setAttribute('aria-pressed', 'true'); });
   }
   function hydList(inp, res) {
@@ -619,7 +619,7 @@
     if (!res || !res.path) return out;
     res.path.details.forEach(function (d) {
       if (d.type !== 'incline' || !d.hyd) return;
-      var rangeMm = d.hydStrokeMm ? d.hydStrokeMm / 2 : 150;
+      var rangeMm = d.hydStrokeMm ? d.hydStrokeMm / 2 : (d.hydStyle === 'mobile' ? 500 : 150);
       out.push({ k: k, seg: d.index + 1, d: d, rangeMm: rangeMm, strokeMm: d.hydStrokeMm, count: d.hydCount, rating: d.hydRating, pump: d.hydPump });
       k++;
     });
@@ -649,7 +649,7 @@
         '<button type="button" class="btn sm" data-hydstep="' + h.k + '" data-dir="1" aria-label="Raise">&#9650; Raise</button></div>' +
         '<p class="hydread" data-hydread="' + h.k + '" role="status">' + hydReadout(h, cur, entered, dl) + '</p>' +
         '<div class="hydbtns"><button type="button" class="btn sm" data-hydauto="' + h.k + '" aria-pressed="' + (hydAuto && hydAuto.k === h.k ? 'true' : 'false') + '">' + (hydAuto && hydAuto.k === h.k ? '&#9632; Stop auto up / down' : '&#9654; Auto up / down (demo)') + '</button><button type="button" class="btn ghost sm" data-hydreset="' + h.k + '">Reset to entered height</button><button type="button" class="btn sm primary" data-hydkeep="' + h.k + '"' + (dl ? '' : ' disabled') + '>Keep this height (write to the route)</button></div></div>';
-    }).join('') + '<p class="note">Try raising or lowering the section to see the angle and the stand extend or retract while the belt runs. The travel range is &plusmn;half of the stroke you entered' + (list.some(function (h) { return !h.strokeMm; }) ? ' (&plusmn;150 mm placeholder where no stroke was entered)' : '') + '. This is a what-if only: it does not check cylinder capacity, stability or the frame. <b>Keep this height</b> copies it into the route so the results and drawings use it. Engineering review required.</p></div>';
+    }).join('') + '<p class="note">Try raising or lowering the section to see the angle and the stand extend or retract while the belt runs. The travel range is &plusmn;half of the stroke you entered' + (list.some(function (h) { return !h.strokeMm; }) ? ' (&plusmn;150 mm placeholder, &plusmn;500 mm for a movable conveyor, where no stroke was entered)' : '') + '. This is a what-if only: it does not check cylinder capacity, stability or the frame. <b>Keep this height</b> copies it into the route so the results and drawings use it. Engineering review required.</p></div>';
   }
   function hydSig(inp, res) { return hydList(inp, res).map(function (h) { return h.k + ':' + h.seg + ':' + h.count + ':' + h.rangeMm + ':' + h.rating + ':' + h.d.rise; }).join('|'); }
   function hydUpdateReads(inp, res) {
@@ -727,7 +727,7 @@
     var m = state.moveDelta, p0 = res.path.points[0], ad = movAdjusted(inp, res), q0 = ad.res.path ? ad.res.path.points[0] : p0, hd = ad.res.path ? ad.res.path.startHeading : 0;
     function row(k, label, min, max, unit) { return '<div class="movctl"><label for="mov' + k + '">' + label + '</label><div class="hydbtns"><button type="button" class="btn sm" data-movstep="' + k + '" data-dir="-1" aria-label="' + label + ' less">&#9664;</button><input type="range" id="mov' + k + '" data-movk="' + k + '" min="' + min + '" max="' + max + '" step="' + (k === 'turn' ? 5 : 50) + '" value="' + m[k] + '" aria-label="' + label + '"><button type="button" class="btn sm" data-movstep="' + k + '" data-dir="1" aria-label="' + label + ' more">&#9654;</button></div></div>'; }
     return '<div class="movpanel" role="group" aria-label="Movable conveyor"><h4>Movable conveyor (on castors)</h4>' + rows.join('') +
-      (anyOn ? '<p class="note">Switch Movable off and the incline goes back to a normal frame with fixed legs - no castor stand. Use the sliders to roll the whole conveyor around the floor, as you would with a truck-loading conveyor.</p>' +
+      (anyOn ? '<p class="note">Switch Movable off and the conveyor goes back to a normal frame with fixed legs - no castor stand. While Movable is on there are no fixed legs anywhere: the whole conveyor stands on the wheeled base and the Raise / Lower control tips the belt up and down for loading. Use the sliders to roll the whole conveyor around the floor, as you would with a truck-loading conveyor.</p>' +
         row('drive', 'Drive forward / back (along its direction)', -5000, 5000) + row('side', 'Side-step left / right', -5000, 5000) + row('turn', 'Turn on the spot (degrees)', -90, 90) +
         '<p class="hydread" data-movread role="status">' + movReadout(q0, hd) + '</p><div class="hydbtns"><button type="button" class="btn sm" data-movauto aria-pressed="' + (movAuto ? 'true' : 'false') + '">' + (movAuto ? '&#9632; Stop driving demo' : '&#9654; Drive back and forth (demo)') + '</button><button type="button" class="btn ghost sm" data-movreset>Reset position</button><button type="button" class="btn sm" data-movkeep' + (movAny() ? '' : ' disabled') + '>Keep this position</button></div>' +
         '<p class="note">This is a what-if on the floor plan: the entered start position stays as entered until you press Keep this position. Check that the conveyor stays inside the floor.</p>' : '<p class="note">Tick Movable on an incline or decline to draw it as a castor-mounted lift stand that you can roll around.</p>') + '</div>';

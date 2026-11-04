@@ -237,7 +237,9 @@
     sc.motorBox = userMotor ? null : { p: fE.p, t: fE.t, l: fE.l, u: fE.u, rt: [-0.30, -0.04], rl: [hw + thk + 0.02, hw + thk + 0.18], ru: [-0.20, -0.04] };
     sc.obstacles = (inp.obstacles || []).filter(function (b) { return pos(b.w) && pos(b.d) && num(b.x) && num(b.y); }).map(function (b, i) { return { x: b.x, y: b.y, w: b.w, d: b.d, h: IND.obstacleH, name: b.name || 'Obstacle ' + (i + 1) }; });
     var hydSeg = details.filter(function (d) { return d.type === 'incline' && d.hyd && pos(Math.abs(d.rise)); }), hydRanges = hydSeg.map(function (d) { return [track.cum[d.p0], track.cum[d.p1]]; });
+    var wholeMobile = hydSeg.some(function (d) { return d.hydStyle === 'mobile'; });   // a movable conveyor is one free-standing unit: no fixed legs anywhere
     legPos.forEach(function (s) {
+      if (wholeMobile) return;
       if (hydRanges.some(function (r) { return s > r[0] + 0.15 && s < r[1] - 0.15; })) return;   // the hydraulic stands carry this stretch
       var pt = track.at(s), tH = norm([pt.tx, pt.ty, 0]), lH = norm([-tH[1], tH[0], 0]), uu = [0, 0, 1], slopeCos = Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz));
       var zb = pt.z - fd * slopeCos; if (zb < 0.06) return;
@@ -450,7 +452,7 @@
           bar(pr.p, pr.far, 0.012, HY.hose); bar([pr.p[0], pr.p[1], 0.1], [pr.far[0], pr.far[1], 0.1], 0.009, HY.hose2);
         });
       });
-      if (hydSeg.some(function (d) { return d.hydStyle === 'mobile'; })) sc.notes.push('Mobile lift stand: a wheeled base frame on four castors sits under the belt, the belt hinges on it at the low end, and a vertical lift column with a lift cylinder and power pack raises the high end. Yellow hand rails run along both sides. Frame, castor, column, cylinder and pack sizes are placeholders unless you entered them; this tool does not select or size the frame, castors, cylinder, pump, motor or load capacity.');
+      if (hydSeg.some(function (d) { return d.hydStyle === 'mobile'; })) sc.notes.push('Mobile lift stand: a wheeled base frame on four castors sits under the belt, the belt hinges on it at the low end, and a vertical lift column with a lift cylinder and power pack raises the high end. Yellow hand rails run along both sides. A movable conveyor is one free-standing unit with no fixed legs: the top section is carried by the belt frame, which needs engineering review. Frame, castor, column, cylinder and pack sizes are placeholders unless you entered them; this tool does not select or size the frame, castors, cylinder, pump, motor or load capacity.');
       if (hydSeg.some(function (d) { return d.hydStyle !== 'mobile'; })) sc.notes.push('Hydraulic stands are drawn as a pair of cylinders with a guide pillar each, base plates, a safety lock collar, hoses and a pump (hand pump or electric power pack). Positions and all cylinder, rod, guide, pump and motor sizes are placeholders: this tool does not select or size cylinders, pumps, motors, load capacity or locking. Stand height is calculated from the route.');
     })();
 
