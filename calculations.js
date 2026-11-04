@@ -56,7 +56,7 @@
   /* Drive and sensors the customer places on the conveyor (all optional; sizes left blank are drawn as INDICATIVE placeholders). */
   var EQUIP_TYPES = { motor: 'Drive motor', photoeye: 'Photo-eye sensor', proximity: 'Proximity sensor', limit: 'Limit switch', encoder: 'Encoder', camera: 'Camera / vision', panel: 'Control panel / junction box', other: 'Other equipment' };
   var EQUIP_KINDS = { posMm: 'mm', mountMm: 'mm', lenMm: 'mm', widMm: 'mm', bodyHMm: 'mm' };
-  var SEGMENT_KINDS = { length: 'm', angle: 'deg', radius: 'mm', horizontal: 'm', rise: 'mm', inclineAngle: 'deg', hydStroke: 'mm' };
+  var SEGMENT_KINDS = { length: 'm', angle: 'deg', radius: 'mm', horizontal: 'm', rise: 'mm', inclineAngle: 'deg', hydStroke: 'mm', hydBaseL: 'mm', hydBaseW: 'mm', hydCastorH: 'mm' };
 
   function parseNum(v) {
     if (v === null || v === undefined) return null;
@@ -161,6 +161,8 @@
       var hc = parseInt(s.hydCount, 10); r.hydCount = r.hyd ? (hc >= 1 && hc <= 3 ? hc : 1) : 0;
       r.hydRating = r.hyd ? String(s.hydRating || '').trim() : '';
       r.hydPump = r.hyd && s.hydPump === 'electric' ? 'electric' : 'hand';
+      r.hydStyle = r.hyd && s.hydStyle === 'mobile' ? 'mobile' : 'twin';
+      if (r.hydStyle === 'mobile') r.hydCount = 1;   // one lift column per mobile stand
       return r;
     }).filter(function (s) {
       return !(s.length === null && s.angle === null && s.radius === null && s.horizontal === null && s.rise === null && s.inclineAngle === null && !s.hyd);
@@ -329,7 +331,7 @@
         x += H * Math.cos(hr); y += H * Math.sin(hr); z += rise;
         L.inclined += len; L.total += len; L.horizontal += H;
         d.length = len; d.horizontal = H; d.rise = rise; d.angle = Math.atan2(rise, H) * 180 / Math.PI;
-        if (s.hyd) { d.hyd = true; d.hydCount = s.hydCount || 1; d.hydStrokeMm = s.hydStroke !== null && s.hydStroke !== undefined && !isNaN(s.hydStroke) && s.hydStroke > 0 ? s.hydStroke : null; d.hydRating = s.hydRating || ''; d.hydPump = s.hydPump === 'electric' ? 'electric' : 'hand'; }
+        if (s.hyd) { d.hyd = true; d.hydCount = s.hydCount || 1; d.hydStrokeMm = s.hydStroke !== null && s.hydStroke !== undefined && !isNaN(s.hydStroke) && s.hydStroke > 0 ? s.hydStroke : null; d.hydRating = s.hydRating || ''; d.hydPump = s.hydPump === 'electric' ? 'electric' : 'hand'; d.hydStyle = s.hydStyle === 'mobile' ? 'mobile' : 'twin'; var pm = function (v) { return v !== null && v !== undefined && !isNaN(v) && v > 0 ? v : null; }; d.hydBaseLmm = pm(s.hydBaseL); d.hydBaseWmm = pm(s.hydBaseW); d.hydCastorHmm = pm(s.hydCastorH); }
         minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
       }
       d.p1 = pts.length - 1;
@@ -482,7 +484,7 @@
         out.missing.push('Complete data for segment ' + (path.incompleteIdx[0] + 1) + ' (' + segs[path.incompleteIdx[0]].type + ')');
       }
       out.hydraulic = path.details.filter(function (d) { return d.type === 'incline' && d.hyd; }).map(function (d) {
-        return { seg: d.index + 1, count: d.hydCount, strokeMm: d.hydStrokeMm, rating: d.hydRating, pump: d.hydPump, riseM: d.rise, horizontalM: d.horizontal, slopeDeg: d.angle, decline: d.rise < 0 };
+        return { seg: d.index + 1, count: d.hydCount, strokeMm: d.hydStrokeMm, rating: d.hydRating, pump: d.hydPump, style: d.hydStyle || 'twin', riseM: d.rise, horizontalM: d.horizontal, slopeDeg: d.angle, decline: d.rise < 0 };
       });
       out.hydraulic.forEach(function (h) {
         if (Math.abs(h.riseM) < 0.01) issue('info', 'Segment ' + h.seg + ': a hydraulic stand is selected but this incline has almost no height change, so the stand has little to adjust.');

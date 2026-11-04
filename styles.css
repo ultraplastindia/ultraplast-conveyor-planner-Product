@@ -290,13 +290,13 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px rgba(200,16,46,.12)
 .hydchk{flex-basis:100%;display:flex;align-items:center;gap:8px;margin:0;cursor:pointer}
 .hydchk input{width:22px;height:22px;min-height:0;flex:none}
 .hydnote{flex-basis:100%;margin:0}
-.hydpanel{border:1px solid #9db7e0;border-left:5px solid #1f5fbf;border-radius:10px;padding:10px 12px;margin:10px 0;background:#f4f8ff}
-.hydpanel h4{margin:0 0 6px}
-.hydctl{margin:0 0 10px}
+.hydpanel,.movpanel{border:1px solid #9db7e0;border-left:5px solid #1f5fbf;border-radius:10px;padding:10px 12px;margin:10px 0;background:#f4f8ff}
+.hydpanel h4,.movpanel h4{margin:0 0 6px}
+.hydctl,.movctl{margin:0 0 10px}
 .hydbtns{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:6px 0}
 .hydbtns input[type=range]{flex:1 1 160px;min-height:34px;accent-color:#1f5fbf}
 .hydread{margin:2px 0;font-weight:600}
-@media (prefers-color-scheme:dark){.hydpanel{background:#1b2433;border-color:#34507d}}
+@media (prefers-color-scheme:dark){.hydpanel,.movpanel{background:#1b2433;border-color:#34507d}}
 
 /* measurement units panel */
 .unitpanel{position:relative}
@@ -331,3 +331,4 @@ input:focus,select:focus,textarea:focus{box-shadow:0 0 0 4px rgba(200,16,46,.12)
   #wmPrint .wmt{display:inline-flex;align-items:center;gap:12px;white-space:nowrap;font:700 20px Arial,Helvetica,sans-serif;letter-spacing:1px}
   #wmPrint .wmlogo{display:inline-block;width:96px;height:34px;background-repeat:no-repeat;background-position:left center;background-size:contain;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
+.movchk{display:block;margin:4px 0}.movpanel input[type=range]{flex:1;min-width:120px}

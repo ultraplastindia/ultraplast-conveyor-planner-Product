@@ -260,6 +260,68 @@
       function bar(a, b, r, color) { var dv = sub(b, a), Ln = len(dv); if (Ln < 1e-6) return; var t = norm(dv), up = Math.abs(t[2]) > 0.95 ? [1, 0, 0] : [0, 0, 1], l = norm(cross(up, t)), u = cross(t, l); obox(a, t, l, u, [0, Ln], [-r, r], [-r, r], color, O).forEach(push); }
       function vcyl(x, y, z0, z1, R, color) { if (z1 - z0 < 1e-4) return; cylinder({ p: [x, y, 0], t: [1, 0, 0], l: [0, 0, 1], u: [0, 1, 0] }, R, z0, z1, color, O).forEach(push); }
       function bx(p, tH, lH, rt, rl, ru, color, skipBottom) { obox(p, tH, lH, UP, rt, rl, ru, color, skipBottom ? OS : O).forEach(push); }
+      sc.hydMobile = [];
+      function mobDims(d) {   // millimetre sizes of the mobile stand; anything not entered is an indicative placeholder
+        var Hr = Math.abs(d.horizontal || 0), ent = { baseL: !!d.hydBaseLmm, baseW: !!d.hydBaseWmm, castorH: !!d.hydCastorHmm };
+        var baseL = d.hydBaseLmm ? d.hydBaseLmm / 1000 : Math.round((0.85 * Hr + 0.45) * 100) / 100, baseW = d.hydBaseWmm ? d.hydBaseWmm / 1000 : Math.round(2 * (hw + thk / 2 + 0.25) * 100) / 100, castorH = d.hydCastorHmm ? d.hydCastorHmm / 1000 : 0.15;
+        return { baseL: baseL, baseW: baseW, castorH: castorH, tube: 0.06, wheelR: Math.min(0.06, castorH * 0.4), back: 0.2, sleeve: 0.07, handleH: 0.95, entered: ent, Hr: Hr };
+      }
+      function mobileStand(d, segNo, s0, s1, lowStart, pivot, electric) {
+        var m = mobDims(d), sP = lowStart ? s0 + (s1 - s0) * 0.85 : s1 - (s1 - s0) * 0.85, pt = track.at(sP);
+        var zb = pt.z - fd * Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz)), H = zb - 0.05, zf = m.castorH + m.tube;
+        var tl = norm([pivot.tx, pivot.ty, 0]), D = lowStart ? tl : [-tl[0], -tl[1], 0], L = [-D[1], D[0], 0], Ox = pivot.x, Oy = pivot.y;
+        if (H < zf + 0.2) { sc.notes.push('The mobile lift stand on segment ' + segNo + ' is too low to draw (the belt frame is less than ' + fmtMm((zf + 0.25) * 1000) + ' above the floor at the lift column).'); return false; }
+        var P = function (a, l) { return [Ox + D[0] * a + L[0] * l, Oy + D[1] * a + L[1] * l, 0]; };
+        var a0 = -m.back, a1 = m.baseL - m.back, w2 = m.baseW / 2, tb = m.tube, tt = tb / 2, colA = 0.85 * m.Hr;
+        var box = function (a, l, ra, rl, z0, z1, color, sb) { bx(P(a, l), D, L, ra, rl, [z0, z1], color, sb); };
+        // base frame: two side rails, cross members
+        [1, -1].forEach(function (sg) { box((a0 + a1) / 2, sg * (w2 - tt), [-(a1 - a0) / 2, (a1 - a0) / 2], [-tt, tt], m.castorH, zf, HY.base); });
+        var nx = Math.max(2, Math.round((a1 - a0) / 0.9)), xs = []; for (var q = 0; q <= nx; q++) xs.push(a0 + tt + (a1 - a0 - tb) * q / nx);
+        xs.forEach(function (a) { box(a, 0, [-tt, tt], [-w2 + tb, w2 - tb], m.castorH, zf, HY.base); });
+        // four castors (red wheel, steel fork and mounting plate)
+        [[a0 + 0.1, 1], [a0 + 0.1, -1], [a1 - 0.1, 1], [a1 - 0.1, -1]].forEach(function (c) {
+          var lp = c[1] * (w2 - 0.04), wp = P(c[0], lp);
+          box(c[0], lp, [-0.045, 0.045], [-0.045, 0.045], m.castorH - 0.012, m.castorH, HY.steel, true);
+          [1, -1].forEach(function (e) { box(c[0], lp + e * 0.028, [-0.02, 0.02], [-0.004, 0.004], m.wheelR, m.castorH - 0.012, HY.steel, true); });
+          cylinder({ p: [wp[0], wp[1], m.wheelR], t: D, l: [0, 0, 1], u: L }, m.wheelR, -0.02, 0.02, [200, 30, 40], O).forEach(push);   // red wheel (axis across the frame)
+          cylinder({ p: [wp[0], wp[1], m.wheelR], t: D, l: [0, 0, 1], u: L }, 0.012, -0.034, 0.034, HY.steel, O).forEach(push);
+        });
+        // push handle (cross bar) at the low end
+        [1, -1].forEach(function (sg) { box(a0 + tt, sg * (w2 - tt), [-0.012, 0.012], [-0.012, 0.012], zf, zf + m.handleH, HY.base); });
+        bar(P(a0 + tt, -(w2 - tt)).map(function (v, i) { return i === 2 ? zf + m.handleH : v; }), P(a0 + tt, w2 - tt).map(function (v, i) { return i === 2 ? zf + m.handleH : v; }), 0.016, HY.hose);
+        // power pack on the frame near the low end
+        var pa = a0 + 0.45;
+        if (!electric) {
+          box(pa, 0, [-0.12, 0.12], [-0.09, 0.09], zf, zf + 0.2, HY.pump); box(pa, 0, [-0.13, 0.13], [-0.10, 0.10], zf + 0.2, zf + 0.22, HY.base);
+          var hb = P(pa + 0.06, 0); bar([hb[0], hb[1], zf + 0.22], [hb[0] + L[0] * 0.24, hb[1] + L[1] * 0.24, zf + 0.5], 0.011, HY.base);
+        } else {
+          box(pa, 0, [-0.17, 0.17], [-0.11, 0.11], zf, zf + 0.2, HY.tank);
+          var pm = P(pa, 0); cylinder({ p: [pm[0], pm[1], zf + 0.265], t: L, l: D, u: UP }, 0.06, -0.15, 0.15, HY.motor, O).forEach(push);
+        }
+        // vertical lift column: outer sleeve on the frame, sliding inner column up to the saddle under the belt frame
+        var sleeveTop = Math.min(zf + 0.55, H - 0.12), sl = m.sleeve, ci = sl - 0.012;
+        box(colA, 0, [-sl - 0.05, sl + 0.05], [-sl - 0.05, sl + 0.05], zf, zf + 0.012, HY.base, true);
+        box(colA, 0, [-sl, sl], [-sl, sl], zf + 0.012, sleeveTop, HY.sleeve);
+        box(colA, 0, [-sl - 0.006, sl + 0.006], [-sl - 0.006, sl + 0.006], sleeveTop - 0.025, sleeveTop, HY.base);
+        box(colA, 0, [-ci, ci], [-ci, ci], sleeveTop - 0.15, H - 0.016, HY.steel);
+        box(colA, 0, [-0.06, 0.06], [-off - 0.04, off + 0.04], H - 0.016, H + 0.04, HY.base);                                     // saddle cross-beam under the belt frame
+        var nt = Math.min(8, Math.floor((sleeveTop - zf - 0.05) / 0.05)); for (var k = 0; k < nt; k++) box(colA, sl, [-0.014, 0.014], [0, 0.004], zf + 0.04 + k * 0.05, zf + 0.044 + k * 0.05, HY.dark);
+        // lift cylinder beside the column (barrel, chrome rod to the saddle, lock collar, hoses to the power pack)
+        var cl = sl + 0.075, cp = P(colA, cl), tubeTop = Math.min(zf + 0.5, H - 0.1), rodTop = H - 0.03;
+        vcyl(cp[0], cp[1], zf, tubeTop, 0.036, HY.tube); vcyl(cp[0], cp[1], tubeTop - 0.04, tubeTop, 0.043, HY.collar);
+        vcyl(cp[0], cp[1], tubeTop, rodTop, 0.02, HY.rod);
+        if (rodTop - tubeTop > 0.1) vcyl(cp[0], cp[1], tubeTop + 0.012, tubeTop + 0.03, 0.036, HY.lock);
+        box(colA, cl, [-0.03, 0.03], [-0.03, 0.03], rodTop, H - 0.016, HY.steel);
+        box(colA, sl + 0.03, [-0.012, 0.012], [-0.02, cl], H - 0.04, H - 0.016, HY.base);                                      // arm joining the rod end to the column saddle
+        var hp = P(pa, 0), hc = P(colA, cl);
+        bar([hp[0], hp[1], zf + 0.03], [hc[0] + D[0] * -0.0, hc[1], zf + 0.03], 0.01, HY.hose); bar([hc[0], hc[1], zf + 0.03], [hc[0], hc[1], tubeTop - 0.03], 0.009, HY.hose2);
+        // diagonal gussets from the column foot to the frame cross members
+        [1, -1].forEach(function (sg) { var g0 = P(colA - 0.5, sg * (w2 - tb)), g1 = P(colA, sg * (sl + 0.02)); bar([g0[0], g0[1], zf], [g1[0], g1[1], zf + 0.3], 0.012, HY.base); });
+        var rec = { n: 0, seg: segNo, s: sP, x: pt.x, y: pt.y, zb: zb, heightM: H, tubeTopM: tubeTop, rodM: Math.max(0, rodTop - tubeTop), offM: off, t: D, l: L, strokeMm: d.hydStrokeMm || null, rating: d.hydRating || '', count: 1, decline: !lowStart, posFrac: 0.85, beltZ: pt.z, pump: electric ? 'electric' : 'hand', guideM: 0, sleeveTopM: sleeveTop, style: 'mobile' };
+        var mob = { seg: segNo, ox: Ox, oy: Oy, d: D, l: L, a0: a0, a1: a1, w: m.baseW, colA: colA, castorH: m.castorH, tube: tb, zf: zf, wheelR: m.wheelR, handleH: m.handleH, sleeve: sl, sleeveTop: sleeveTop, tubeTop: tubeTop, rodTop: rodTop, H: H, pa: pa, electric: electric, baseL: m.baseL, entered: m.entered, off: off, pivotZ: null, lowStart: lowStart, horizontal: m.Hr, stroke: d.hydStrokeMm || null, rating: d.hydRating || '' };
+        if (a1 < colA + 0.2) sc.notes.push('Segment ' + segNo + ': the entered base frame length is shorter than the lift column position - engineering review required.');
+        return { rec: rec, mob: mob, m: m };
+      }
       hydSeg.forEach(function (d) {
         var s0 = track.cum[d.p0], s1 = track.cum[d.p1], lowStart = d.rise >= 0, cnt = d.hydCount || 1, fr = cnt === 1 ? [0.85] : cnt === 2 ? [0.9, 0.5] : [0.9, 0.62, 0.34], pumpDone = false, segNo = details.indexOf(d) + 1, ports = [], electric = d.hydPump === 'electric';
         var sLow = lowStart ? s0 : s1, pivot = track.at(sLow);
@@ -267,7 +329,14 @@
         (function () {
           var tH = norm([pivot.tx, pivot.ty, 0]), lH = [-tH[1], tH[0], 0], zp = pivot.z - fd * Math.sqrt(Math.max(0, 1 - pivot.tz * pivot.tz)) * 0.5;
           if (zp < 0.05) return;
-          sc.hydPivots.push({ seg: segNo, s: sLow, x: pivot.x, y: pivot.y, z: zp });
+          sc.hydPivots.push({ seg: segNo, s: sLow, x: pivot.x, y: pivot.y, z: zp, mobile: d.hydStyle === 'mobile' });
+          if (d.hydStyle === 'mobile') {   // mobile stand: the hinge sits on two posts rising from the castor frame
+            var zt0 = mobDims(d).castorH + mobDims(d).tube;
+            if (zp < zt0 + 0.03) sc.notes.push('Segment ' + segNo + ': the castor base frame is as high as the low end of the belt, so the hinge posts are very short. Check the inlet height or the castor height.');
+            cylinder({ p: [pivot.x, pivot.y, zp], t: tH, l: lH, u: UP }, 0.014, -off - 0.045, off + 0.045, HY.rod, O).forEach(push);
+            [1, -1].forEach(function (sg) { var pp = [pivot.x + lH[0] * off * sg, pivot.y + lH[1] * off * sg, 0]; bx(pp, tH, lH, [-0.04, 0.04], [-0.008, 0.008], [Math.min(zt0, zp), zp + 0.07], HY.base); vcyl(pp[0] + lH[0] * sg * 0.02, pp[1] + lH[1] * sg * 0.02, zp - 0.012, zp + 0.012, 0.02, HY.steel); });
+            return;
+          }
           cylinder({ p: [pivot.x, pivot.y, zp], t: tH, l: lH, u: UP }, 0.014, -off - 0.045, off + 0.045, HY.rod, O).forEach(push);
           [1, -1].forEach(function (sg) {
             var pp = [pivot.x + lH[0] * off * sg, pivot.y + lH[1] * off * sg, 0];
@@ -276,6 +345,18 @@
             vcyl(pp[0] + lH[0] * sg * 0.02, pp[1] + lH[1] * sg * 0.02, zp - 0.012, zp + 0.012, 0.02, HY.steel);                  // pin retaining washer
           });
         })();
+        if (d.hydStyle === 'mobile') {
+          var mr = mobileStand(d, segNo, s0, s1, lowStart, pivot, electric);
+          if (mr) {
+            no++; mr.rec.n = no; mr.rec.id = 'H' + no; mr.mob.id = 'H' + no; mr.mob.sLow = sLow; mr.mob.riseM = Math.abs(d.rise); mr.mob.pivotZ = (sc.hydPivots.filter(function (q) { return q.seg === segNo; })[0] || {}).z || null; sc.hyd.push(mr.rec); sc.hydMobile.push(mr.mob);
+            var cpt = track.at(mr.rec.s), lat = mr.rec.l;
+            tag([cpt.x + lat[0] * (off + 0.35), cpt.y + lat[1] * (off + 0.35), mr.rec.heightM * 0.6], 'H' + no + ' Mobile lift stand (castor base)' + (d.hydRating ? ' · ' + d.hydRating : ''), d.hydRating ? 'entered' : 'ind', 'H' + no);
+            if (detail) dim([cpt.x + lat[0] * (off + 0.2), cpt.y + lat[1] * (off + 0.2), 0], [cpt.x + lat[0] * (off + 0.2), cpt.y + lat[1] * (off + 0.2), mr.rec.heightM], 'H' + no + ' height ' + fmtMm(mr.rec.heightM * 1000), 'calc', { off: [8, 0] });
+            var mb = mr.mob, ca = [mb.ox + mb.d[0] * mb.a0, mb.oy + mb.d[1] * mb.a0], cb = [mb.ox + mb.d[0] * mb.a1, mb.oy + mb.d[1] * mb.a1];
+            [ca, cb].forEach(function (c) { grow(clo, chi, [c[0] - mb.w, c[1] - mb.w, 0]); grow(clo, chi, [c[0] + mb.w, c[1] + mb.w, mr.rec.heightM + 0.3]); grow(lo, hi, [c[0] - mb.w, c[1] - mb.w, 0]); grow(lo, hi, [c[0] + mb.w, c[1] + mb.w, mr.rec.heightM + 0.3]); });
+          }
+          return;
+        }
         fr.forEach(function (u, j) {
           var sP = lowStart ? s0 + (s1 - s0) * u : s1 - (s1 - s0) * u, pt = track.at(sP), tH = norm([pt.tx, pt.ty, 0]), lH = [-tH[1], tH[0], 0], P0 = [pt.x, pt.y, 0];
           var zb = pt.z - fd * Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz)), H = zb - 0.05;
@@ -363,7 +444,8 @@
           bar(pr.p, pr.far, 0.012, HY.hose); bar([pr.p[0], pr.p[1], 0.1], [pr.far[0], pr.far[1], 0.1], 0.009, HY.hose2);
         });
       });
-      sc.notes.push('Hydraulic stands are drawn as a pair of cylinders with a guide pillar each, base plates, a safety lock collar, hoses and a pump (hand pump or electric power pack). Positions and all cylinder, rod, guide, pump and motor sizes are placeholders: this tool does not select or size cylinders, pumps, motors, load capacity or locking. Stand height is calculated from the route.');
+      if (hydSeg.some(function (d) { return d.hydStyle === 'mobile'; })) sc.notes.push('Mobile lift stand: a welded base frame on four castors, a vertical lift column with a lift cylinder and a power pack. Frame, castor, column, cylinder and pack sizes are placeholders unless you entered them; this tool does not select or size the frame, castors, cylinder, pump, motor or load capacity.');
+      if (hydSeg.some(function (d) { return d.hydStyle !== 'mobile'; })) sc.notes.push('Hydraulic stands are drawn as a pair of cylinders with a guide pillar each, base plates, a safety lock collar, hoses and a pump (hand pump or electric power pack). Positions and all cylinder, rod, guide, pump and motor sizes are placeholders: this tool does not select or size cylinders, pumps, motors, load capacity or locking. Stand height is calculated from the route.');
     })();
 
     /* ----- drive motor, sensors and other equipment placed by the user ----- */

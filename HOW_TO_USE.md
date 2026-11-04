@@ -48,3 +48,15 @@ Each stand has twin cylinders with a trunnion foot, head flange, chrome rod with
 
 ## Drawings: export everything together
 On the results page the drawing card has **Download ALL drawings together (DXF for AutoCAD)**. One file holds the plan, floor layout, side elevation, end view, the equipment and route schedules, the title block and the 3D model (to the right of the 2D layout). Everything is full size in millimetres. **Download all sheets (SVG)** gives the same as two A3 sheets. Dimensions are lines and text (not editable AutoCAD dimension objects); the tests check that every dimension's length equals the number printed on it.
+
+## Mobile castor lift stand (like a mobile inclined belt conveyor)
+
+On an incline row, tick **Support with hydraulic stand(s)** and set **Stand type** to **Mobile castor lift stand**. The 3D view then shows a welded base frame on four castors with a push handle, a vertical lift column, a lift cylinder and a power pack (hand pump or electric), with the belt hinged at its low end. Optional boxes: base frame length, base frame width, castor height. Anything left blank is an indicative placeholder (grey, marked *). The Raise / Lower control works as for the other stand type.
+
+On the results page, under **Engineering drawing (CAD)**, a separate **Mobile lift stand drawing** shows plan, side and front views with all dimensions and a dimension table. Download it as **DXF (AutoCAD)** or **SVG (A3)**. Black = entered, red = calculated, grey * = indicative. It is marked "INDICATIVE drawing - for engineering review, not for manufacture" and carries the company watermark. The tool does not select or size the frame, castors, cylinder, pump, motor or capacity.
+
+## Movable conveyor switch (results page)
+
+Above the 3D view, **Movable conveyor (on castors)** lists every incline and decline. Tick **Movable** and that segment gets the castor lift stand in the 3D view, the drawings and the separate stand drawing. Untick it and the incline goes back to a normal frame with plain legs: no stand in 3D, none in the drawings. (A floor stand chosen earlier on the same segment is replaced when you tick Movable.)
+
+While Movable is on, sliders roll the whole conveyor around the floor like a truck-loading conveyor: **Drive forward / back**, **Side-step**, **Turn on the spot**, plus a driving demo and **Reset position**. This is a what-if; **Keep this position** saves the new start point and direction into your entries, and the drawings follow.
