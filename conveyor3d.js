@@ -263,16 +263,16 @@
       sc.hydMobile = [];
       function mobDims(d) {   // millimetre sizes of the mobile stand; anything not entered is an indicative placeholder
         var Hr = Math.abs(d.horizontal || 0), ent = { baseL: !!d.hydBaseLmm, baseW: !!d.hydBaseWmm, castorH: !!d.hydCastorHmm };
-        var baseL = d.hydBaseLmm ? d.hydBaseLmm / 1000 : Math.round((0.85 * Hr + 0.45) * 100) / 100, baseW = d.hydBaseWmm ? d.hydBaseWmm / 1000 : Math.round(2 * (hw + thk / 2 + 0.25) * 100) / 100, castorH = d.hydCastorHmm ? d.hydCastorHmm / 1000 : 0.15;
-        return { baseL: baseL, baseW: baseW, castorH: castorH, tube: 0.06, wheelR: Math.min(0.06, castorH * 0.4), back: 0.2, sleeve: 0.07, handleH: 0.95, entered: ent, Hr: Hr };
+        var baseL = d.hydBaseLmm ? d.hydBaseLmm / 1000 : Math.max(1.0, Math.round((0.6 * Hr + 0.55) * 100) / 100), baseW = d.hydBaseWmm ? d.hydBaseWmm / 1000 : Math.round(2 * (hw + thk / 2 + 0.25) * 100) / 100, castorH = d.hydCastorHmm ? d.hydCastorHmm / 1000 : 0.15;
+        return { baseL: baseL, baseW: baseW, castorH: castorH, tube: 0.06, wheelR: Math.min(0.06, castorH * 0.4), back: 0.25, sleeve: 0.07, handleH: 0.45, colFrac: 0.6, railH: 0.5, entered: ent, Hr: Hr };
       }
       function mobileStand(d, segNo, s0, s1, lowStart, pivot, electric) {
-        var m = mobDims(d), sP = lowStart ? s0 + (s1 - s0) * 0.85 : s1 - (s1 - s0) * 0.85, pt = track.at(sP);
+        var m = mobDims(d), sP = lowStart ? s0 + (s1 - s0) * m.colFrac : s1 - (s1 - s0) * m.colFrac, pt = track.at(sP);
         var zb = pt.z - fd * Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz)), H = zb - 0.05, zf = m.castorH + m.tube;
         var tl = norm([pivot.tx, pivot.ty, 0]), D = lowStart ? tl : [-tl[0], -tl[1], 0], L = [-D[1], D[0], 0], Ox = pivot.x, Oy = pivot.y;
         if (H < zf + 0.2) { sc.notes.push('The mobile lift stand on segment ' + segNo + ' is too low to draw (the belt frame is less than ' + fmtMm((zf + 0.25) * 1000) + ' above the floor at the lift column).'); return false; }
         var P = function (a, l) { return [Ox + D[0] * a + L[0] * l, Oy + D[1] * a + L[1] * l, 0]; };
-        var a0 = -m.back, a1 = m.baseL - m.back, w2 = m.baseW / 2, tb = m.tube, tt = tb / 2, colA = 0.85 * m.Hr;
+        var tb = m.tube, tt = tb / 2, colA = m.colFrac * m.Hr, a0 = -m.back, a1 = m.baseL - m.back, w2 = m.baseW / 2;
         var box = function (a, l, ra, rl, z0, z1, color, sb) { bx(P(a, l), D, L, ra, rl, [z0, z1], color, sb); };
         // base frame: two side rails, cross members
         [1, -1].forEach(function (sg) { box((a0 + a1) / 2, sg * (w2 - tt), [-(a1 - a0) / 2, (a1 - a0) / 2], [-tt, tt], m.castorH, zf, HY.base); });
@@ -286,11 +286,18 @@
           cylinder({ p: [wp[0], wp[1], m.wheelR], t: D, l: [0, 0, 1], u: L }, m.wheelR, -0.02, 0.02, [200, 30, 40], O).forEach(push);   // red wheel (axis across the frame)
           cylinder({ p: [wp[0], wp[1], m.wheelR], t: D, l: [0, 0, 1], u: L }, 0.012, -0.034, 0.034, HY.steel, O).forEach(push);
         });
-        // push handle (cross bar) at the low end
-        [1, -1].forEach(function (sg) { box(a0 + tt, sg * (w2 - tt), [-0.012, 0.012], [-0.012, 0.012], zf, zf + m.handleH, HY.base); });
-        bar(P(a0 + tt, -(w2 - tt)).map(function (v, i) { return i === 2 ? zf + m.handleH : v; }), P(a0 + tt, w2 - tt).map(function (v, i) { return i === 2 ? zf + m.handleH : v; }), 0.016, HY.hose);
+        // handle loop (rectangular tube) along one side of the frame, for pulling / pushing the conveyor
+        var hA = a0 + 0.35 * (a1 - a0), hB = a0 + 0.65 * (a1 - a0), hl = w2 - 0.07;
+        [hA, hB].forEach(function (a) { box(a, hl, [-0.012, 0.012], [-0.012, 0.012], zf, zf + m.handleH, HY.base); });
+        bar([P(hA, hl)[0], P(hA, hl)[1], zf + m.handleH], [P(hB, hl)[0], P(hB, hl)[1], zf + m.handleH], 0.014, HY.base);
+        // yellow hand rails along both sides of the incline (posts on the side channel, rail 500 mm above the belt)
+        (function () {
+          var sA = s0 + 0.3, sB = s1 - 0.3, n = Math.max(1, Math.round((sB - sA) / 1.2)), rr = hw + thk + 0.03, YL = [244, 196, 22];
+          [1, -1].forEach(function (sg) { var prev = null; for (var q = 0; q <= n; q++) { var qq = track.at(sA + (sB - sA) * q / n), tq = norm([qq.tx, qq.ty, 0]), lq = [-tq[1], tq[0], 0], bx0 = qq.x + lq[0] * rr * sg, by0 = qq.y + lq[1] * rr * sg, top = [bx0, by0, qq.z + m.railH];
+            bar([bx0, by0, qq.z - 0.08], top, 0.012, YL); if (prev) bar(prev, top, 0.014, YL); prev = top; } });
+        })();
         // power pack on the frame near the low end
-        var pa = a0 + 0.45;
+        var pa = a0 + 0.6;
         if (!electric) {
           box(pa, 0, [-0.12, 0.12], [-0.09, 0.09], zf, zf + 0.2, HY.pump); box(pa, 0, [-0.13, 0.13], [-0.10, 0.10], zf + 0.2, zf + 0.22, HY.base);
           var hb = P(pa + 0.06, 0); bar([hb[0], hb[1], zf + 0.22], [hb[0] + L[0] * 0.24, hb[1] + L[1] * 0.24, zf + 0.5], 0.011, HY.base);
@@ -316,10 +323,9 @@
         var hp = P(pa, 0), hc = P(colA, cl);
         bar([hp[0], hp[1], zf + 0.03], [hc[0] + D[0] * -0.0, hc[1], zf + 0.03], 0.01, HY.hose); bar([hc[0], hc[1], zf + 0.03], [hc[0], hc[1], tubeTop - 0.03], 0.009, HY.hose2);
         // diagonal gussets from the column foot to the frame cross members
-        [1, -1].forEach(function (sg) { var g0 = P(colA - 0.5, sg * (w2 - tb)), g1 = P(colA, sg * (sl + 0.02)); bar([g0[0], g0[1], zf], [g1[0], g1[1], zf + 0.3], 0.012, HY.base); });
-        var rec = { n: 0, seg: segNo, s: sP, x: pt.x, y: pt.y, zb: zb, heightM: H, tubeTopM: tubeTop, rodM: Math.max(0, rodTop - tubeTop), offM: off, t: D, l: L, strokeMm: d.hydStrokeMm || null, rating: d.hydRating || '', count: 1, decline: !lowStart, posFrac: 0.85, beltZ: pt.z, pump: electric ? 'electric' : 'hand', guideM: 0, sleeveTopM: sleeveTop, style: 'mobile' };
-        var mob = { seg: segNo, ox: Ox, oy: Oy, d: D, l: L, a0: a0, a1: a1, w: m.baseW, colA: colA, castorH: m.castorH, tube: tb, zf: zf, wheelR: m.wheelR, handleH: m.handleH, sleeve: sl, sleeveTop: sleeveTop, tubeTop: tubeTop, rodTop: rodTop, H: H, pa: pa, electric: electric, baseL: m.baseL, entered: m.entered, off: off, pivotZ: null, lowStart: lowStart, horizontal: m.Hr, stroke: d.hydStrokeMm || null, rating: d.hydRating || '' };
-        if (a1 < colA + 0.2) sc.notes.push('Segment ' + segNo + ': the entered base frame length is shorter than the lift column position - engineering review required.');
+        [1, -1].forEach(function (sg) { var g0 = P(Math.max(a0 + tb, colA - 0.5), sg * (w2 - tb)), g1 = P(colA, sg * (sl + 0.02)); bar([g0[0], g0[1], zf], [g1[0], g1[1], zf + 0.3], 0.012, HY.base); });
+        var rec = { n: 0, seg: segNo, s: sP, x: pt.x, y: pt.y, zb: zb, heightM: H, tubeTopM: tubeTop, rodM: Math.max(0, rodTop - tubeTop), offM: off, t: D, l: L, strokeMm: d.hydStrokeMm || null, rating: d.hydRating || '', count: 1, decline: !lowStart, posFrac: m.colFrac, beltZ: pt.z, pump: electric ? 'electric' : 'hand', guideM: 0, sleeveTopM: sleeveTop, style: 'mobile' };
+        var mob = { seg: segNo, ox: Ox, oy: Oy, d: D, l: L, a0: a0, a1: a1, w: m.baseW, colA: colA, castorH: m.castorH, tube: tb, zf: zf, wheelR: m.wheelR, handleH: m.handleH, hA: hA, hB: hB, hl: hl, railH: m.railH, sleeve: sl, sleeveTop: sleeveTop, tubeTop: tubeTop, rodTop: rodTop, H: H, pa: pa, electric: electric, baseL: m.baseL, entered: m.entered, off: off, pivotZ: null, lowStart: lowStart, horizontal: m.Hr, stroke: d.hydStrokeMm || null, rating: d.hydRating || '' };
         return { rec: rec, mob: mob, m: m };
       }
       hydSeg.forEach(function (d) {
@@ -331,7 +337,7 @@
           if (zp < 0.05) return;
           sc.hydPivots.push({ seg: segNo, s: sLow, x: pivot.x, y: pivot.y, z: zp, mobile: d.hydStyle === 'mobile' });
           if (d.hydStyle === 'mobile') {   // mobile stand: the hinge sits on two posts rising from the castor frame
-            var zt0 = mobDims(d).castorH + mobDims(d).tube;
+            var zt0 = mobDims(d).castorH + mobDims(d).tube;   // the belt hinges on posts rising from the front of the wheeled base frame
             if (zp < zt0 + 0.03) sc.notes.push('Segment ' + segNo + ': the castor base frame is as high as the low end of the belt, so the hinge posts are very short. Check the inlet height or the castor height.');
             cylinder({ p: [pivot.x, pivot.y, zp], t: tH, l: lH, u: UP }, 0.014, -off - 0.045, off + 0.045, HY.rod, O).forEach(push);
             [1, -1].forEach(function (sg) { var pp = [pivot.x + lH[0] * off * sg, pivot.y + lH[1] * off * sg, 0]; bx(pp, tH, lH, [-0.04, 0.04], [-0.008, 0.008], [Math.min(zt0, zp), zp + 0.07], HY.base); vcyl(pp[0] + lH[0] * sg * 0.02, pp[1] + lH[1] * sg * 0.02, zp - 0.012, zp + 0.012, 0.02, HY.steel); });
@@ -444,7 +450,7 @@
           bar(pr.p, pr.far, 0.012, HY.hose); bar([pr.p[0], pr.p[1], 0.1], [pr.far[0], pr.far[1], 0.1], 0.009, HY.hose2);
         });
       });
-      if (hydSeg.some(function (d) { return d.hydStyle === 'mobile'; })) sc.notes.push('Mobile lift stand: a welded base frame on four castors, a vertical lift column with a lift cylinder and a power pack. Frame, castor, column, cylinder and pack sizes are placeholders unless you entered them; this tool does not select or size the frame, castors, cylinder, pump, motor or load capacity.');
+      if (hydSeg.some(function (d) { return d.hydStyle === 'mobile'; })) sc.notes.push('Mobile lift stand: a wheeled base frame on four castors sits under the belt, the belt hinges on it at the low end, and a vertical lift column with a lift cylinder and power pack raises the high end. Yellow hand rails run along both sides. Frame, castor, column, cylinder and pack sizes are placeholders unless you entered them; this tool does not select or size the frame, castors, cylinder, pump, motor or load capacity.');
       if (hydSeg.some(function (d) { return d.hydStyle !== 'mobile'; })) sc.notes.push('Hydraulic stands are drawn as a pair of cylinders with a guide pillar each, base plates, a safety lock collar, hoses and a pump (hand pump or electric power pack). Positions and all cylinder, rod, guide, pump and motor sizes are placeholders: this tool does not select or size cylinders, pumps, motors, load capacity or locking. Stand height is calculated from the route.');
     })();
 

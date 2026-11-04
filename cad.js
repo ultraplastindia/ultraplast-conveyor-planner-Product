@@ -526,7 +526,7 @@
     var a0 = m.a0 * K, a1 = m.a1 * K, w2 = m.w * K / 2, tb = m.tube * K, tt = tb / 2, cH = m.castorH * K, zf = m.zf * K, R = m.wheelR * K, colA = m.colA * K, sl = m.sleeve * K, ci = sl - 12;
     var sTop = m.sleeveTop * K, tTop = m.tubeTop * K, rTop = m.rodTop * K, H = m.H * K, hh = m.handleH * K, off = m.off * K, Hr = m.horizontal * K, rise = (m.riseM || 0) * K, pz = (m.pivotZ || 0) * K, cl = sl + 75;
     var slope = Hr > 0 ? rise / Hr : 0, uz = function (a) { return (H + 50) + slope * (a - colA); };   // underside of the belt frame (calculated through the lift column point)
-    var pa = m.pa * K, packL = m.electric ? 170 : 130, packW = m.electric ? 110 : 90;
+    var hA = m.hA * K, hB = m.hB * K, hl = m.hl * K, rail = m.railH * K, rr = (hw + thk + 0.03) * K, pa = m.pa * K, packL = m.electric ? 170 : 130, packW = m.electric ? 110 : 90;
     var rk = function (k) { return k; }, kb = ent.baseL ? 'entered' : 'ind', kw = ent.baseW ? 'entered' : 'ind', kc = ent.castorH ? 'entered' : 'ind';
     var star = function (kind) { return kind === 'entered' ? '' : ' *'; };
     var rect2 = function (v, x0, y0, x1, y1, layer) { v.poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true, layer); };
@@ -538,16 +538,16 @@
     rect2(Pn, a0, -w2, a1, w2, 'HYD'); rect2(Pn, a0 + tb, -w2 + tb, a1 - tb, w2 - tb, 'HYD_IND');
     var nx = Math.max(2, Math.round((a1 - a0) / 900)); for (var q = 1; q < nx; q++) { var cx0 = a0 + tt + (a1 - a0 - tb) * q / nx; rect2(Pn, cx0 - tt, -w2 + tb, cx0 + tt, w2 - tb, 'HYD_IND'); }
     [[a0 + 100, 1], [a0 + 100, -1], [a1 - 100, 1], [a1 - 100, -1]].forEach(function (c) { var ly = c[1] * (w2 - 40); rect2(Pn, c[0] - 45, ly - 45, c[0] + 45, ly + 45, 'HYD'); rect2(Pn, c[0] - R, ly - 20, c[0] + R, ly + 20, 'HYD_IND'); });
-    [1, -1].forEach(function (sg) { Pn.circle([a0 + tt, sg * (w2 - tt)], 14, 'HYD'); });
-    Pn.line([a0 + tt, -(w2 - tt)], [a0 + tt, w2 - tt], 'HYD');
+    Pn.circle([hA, hl], 14, 'HYD'); Pn.circle([hB, hl], 14, 'HYD'); Pn.line([hA, hl], [hB, hl], 'HYD'); Pn.text([(hA + hB) / 2, hl - 90], 'Handle loop', 0, 'HYD_IND', { rel: true, mid: true });
+    [1, -1].forEach(function (sg) { Pn.line([300, sg * rr], [Hr - 300, sg * rr], 'FRAME_IND'); });
     rect2(Pn, pa - packL, -packW, pa + packL, packW, 'HYD_IND'); Pn.text([pa, packW + 60], (m.electric ? 'Power pack + motor (indicative)' : 'Hand pump unit (indicative)'), 0, 'HYD_IND', { rel: true, mid: true });
     rect2(Pn, colA - sl, -sl, colA + sl, sl, 'HYD'); Pn.circle([colA, cl], 36, 'HYD');
     Pn.line([0, -hw * K], [Hr, -hw * K], 'FRAME_IND'); Pn.line([0, hw * K], [Hr, hw * K], 'FRAME_IND'); Pn.line([Hr, -hw * K], [Hr, hw * K], 'FRAME_IND'); Pn.line([0, -hw * K], [0, hw * K], 'FRAME_IND');
     Pn.circle([0, 0], 14, 'HYD'); Pn.text([0, hw * K + 60], 'Pivot (hinge)', 0, 'HYD_IND', { rel: true, mid: true });
     Pn.line([colA, -w2 - 60], [colA, w2 + 60], 'CENTRE'); Pn.text([colA, w2 + 110], 'Lift column', 0, 'HYD', { rel: true, mid: true });
     Pn.text([(a0 + a1) / 2, w2 + 300], m.id + ' MOBILE LIFT STAND - PLAN', 0, 'TITLE', { rel: true, mid: true });
-    Pn.dim([a0, -w2], [a1, -w2], -200, 'Base frame length ' + Math.round(a1 - a0) + ' mm' + star(kb), kb);
-    Pn.dim([a1, -w2], [a1, w2], -200, 'Base frame width ' + Math.round(2 * w2) + ' mm' + star(kw), kw);
+    Pn.dim([a0, -w2], [a1, -w2], -200, 'Lift stand base length ' + Math.round(a1 - a0) + ' mm' + star(kb), kb);
+    Pn.dim([a1, -w2], [a1, w2], -200, 'Lift stand base width ' + Math.round(2 * w2) + ' mm' + star(kw), kw);
     Pn.dim([0, -w2], [colA, -w2], -460, 'Pivot to lift column ' + Math.round(colA) + ' mm', 'calc');
     Pn.dim([a0, -w2], [0, -w2], -460, 'Frame behind pivot ' + Math.round(-a0) + ' mm *', 'ind');
     Pn.dim([0, -hw * K], [0, hw * K], 200, 'Belt width ' + Math.round(2 * hw * K) + ' mm' + (wEntered ? '' : ' (not entered)'), wKind);
@@ -557,23 +557,26 @@
     Sd.line([a0 - 300, 0], [Math.max(a1, Hr) + 300, 0], 'FLOOR');
     rect2(Sd, a0, cH, a1, zf, 'HYD'); rect2(Sd, a0, cH, a1, cH + 2, 'HYD_IND');
     [a0 + 100, a1 - 100].forEach(function (a) { Sd.circle([a, R], R, 'HYD'); Sd.circle([a, R], 12, 'HYD_IND'); rect2(Sd, a - 45, cH - 12, a + 45, cH, 'HYD_IND'); Sd.line([a - 20, R], [a - 20, cH - 12], 'HYD_IND'); Sd.line([a + 20, R], [a + 20, cH - 12], 'HYD_IND'); });
-    Sd.line([a0 + tt, zf], [a0 + tt, zf + hh], 'HYD'); Sd.line([a0 + tt - 25, zf + hh], [a0 + tt + 25, zf + hh], 'HYD');
+    Sd.line([hA, zf], [hA, zf + hh], 'HYD'); Sd.line([hB, zf], [hB, zf + hh], 'HYD'); Sd.line([hA, zf + hh], [hB, zf + hh], 'HYD');
+    Sd.line([300, uz(300) + fd * K + rail], [Hr - 300, uz(Hr - 300) + fd * K + rail], 'FRAME_IND'); Sd.line([300, uz(300) + fd * K], [300, uz(300) + fd * K + rail], 'FRAME_IND'); Sd.line([Hr - 300, uz(Hr - 300) + fd * K], [Hr - 300, uz(Hr - 300) + fd * K + rail], 'FRAME_IND');
     rect2(Sd, pa - packL, zf, pa + packL, zf + 200, 'HYD_IND');
     rect2(Sd, colA - sl, zf, colA + sl, sTop, 'HYD'); rect2(Sd, colA - ci, sTop - 150, colA + ci, H - 16, 'HYD_IND'); rect2(Sd, colA - 60, H - 16, colA + 60, H + 40, 'HYD');
     rect2(Sd, colA - 36, zf, colA + 36, tTop, 'HYD_IND'); Sd.line([colA - 20, tTop], [colA - 20, rTop], 'HYD_IND'); Sd.line([colA + 20, tTop], [colA + 20, rTop], 'HYD_IND');
     Sd.poly([[0, uz(0)], [Hr, uz(Hr)], [Hr, uz(Hr) + fd * K], [0, uz(0) + fd * K]], true, 'FRAME_IND');
-    if (pz > 0) { Sd.circle([0, pz], 14, 'HYD'); Sd.line([0, 0], [0, pz - 14], 'HYD_IND'); }
+    if (pz > 0) { Sd.circle([0, pz], 14, 'HYD'); Sd.line([0, zf], [0, pz - 14], 'HYD_IND'); }
     Sd.text([colA, H + 160], 'Lift column', 0, 'HYD', { rel: true, mid: true }); Sd.text([0, pz + 120], 'Pivot', 0, 'HYD_IND', { rel: true, mid: true });
-    Sd.text([a0 + 60, zf + hh + 80], 'Push handle', 0, 'HYD_IND', { rel: true });
+    Sd.text([(hA + hB) / 2, zf + hh + 80], 'Handle loop', 0, 'HYD_IND', { rel: true });
     Sd.text([(a0 + a1) / 2, uz(Hr) + fd * K + 300], m.id + ' MOBILE LIFT STAND - SIDE VIEW (low end of the belt on the left)', 0, 'TITLE', { rel: true, mid: true });
-    Sd.dim([a0, 0], [a1, 0], -200, 'Base frame length ' + Math.round(a1 - a0) + ' mm' + star(kb), kb);
+    Sd.dim([a0, 0], [a1, 0], -200, 'Lift stand base length ' + Math.round(a1 - a0) + ' mm' + star(kb), kb);
     Sd.dim([0, 0], [colA, 0], -380, 'Pivot to lift column ' + Math.round(colA) + ' mm', 'calc');
     Sd.dim([0, 0], [Hr, 0], -560, 'Horizontal run of the belt ' + Math.round(Hr) + ' mm', 'calc');
     Sd.dim([colA + sl, 0], [colA + sl, H], -560, m.id + ' height to saddle ' + Math.round(H) + ' mm', 'calc');
     Sd.dim([a1, 0], [a1, cH], -240, 'Castor height ' + Math.round(cH) + ' mm' + star(kc), kc);
     Sd.dim([colA - sl, zf], [colA - sl, sTop], 200, 'Sleeve height ' + Math.round(sTop - zf) + ' mm *', 'ind');
     if (rTop - tTop > 20) Sd.dim([colA - sl, tTop], [colA - sl, rTop], 520, 'Rod out ' + Math.round(rTop - tTop) + ' mm *', 'ind');
-    Sd.dim([a0 + tt, zf], [a0 + tt, zf + hh], 200, 'Handle height ' + Math.round(hh) + ' mm *', 'ind');
+    Sd.text([Hr / 2, uz(Hr / 2) + fd * K + rail + 90], 'Yellow hand rail (indicative)', 0, 'HYD_IND', { rel: true, mid: true });
+    Sd.dim([Hr / 2, uz(Hr / 2) + fd * K], [Hr / 2, uz(Hr / 2) + fd * K + rail], 200, 'Hand rail height ' + Math.round(rail) + ' mm *', 'ind');
+    Sd.dim([hA, zf], [hA, zf + hh], 200, 'Handle height ' + Math.round(hh) + ' mm *', 'ind');
     if (pz > 0) Sd.dim([0, 0], [0, pz], 200, 'Pivot height ' + Math.round(pz) + ' mm', 'calc');
     if (rise > 0) Sd.dim([Hr, pz], [Hr, pz + rise], -260, 'Rise of the belt ' + Math.round(rise) + ' mm', 'calc');
     if (m.stroke) Sd.dim([colA + sl, H - m.stroke], [colA + sl, H], -240, 'Lift stroke ' + Math.round(m.stroke) + ' mm (entered)', 'entered');
@@ -584,9 +587,9 @@
     [1, -1].forEach(function (sg) {
       var ly = sg * (w2 - 40), lo = sg * (w2 - tt);
       rect2(Fr, lo - tt, cH, lo + tt, zf, 'HYD'); rect2(Fr, ly - 20, 0, ly + 20, 2 * R, 'HYD'); rect2(Fr, ly - 45, cH - 12, ly + 45, cH, 'HYD_IND'); Fr.line([ly - 28, 2 * R], [ly - 28, cH - 12], 'HYD_IND'); Fr.line([ly + 28, 2 * R], [ly + 28, cH - 12], 'HYD_IND');
-      Fr.line([lo, zf], [lo, zf + hh], 'HYD');
     });
-    Fr.line([-(w2 - tt), zf + hh], [w2 - tt, zf + hh], 'HYD');
+    Fr.line([hl, zf], [hl, zf + hh], 'HYD');
+    [1, -1].forEach(function (sg) { Fr.line([sg * rr, uz(colA) + fd * K], [sg * rr, uz(colA) + fd * K + rail], 'FRAME_IND'); }); Fr.line([-rr, uz(colA) + fd * K + rail], [rr, uz(colA) + fd * K + rail], 'FRAME_IND');
     rect2(Fr, -w2 + tb, cH, w2 - tb, zf, 'HYD_IND');
     rect2(Fr, -sl, zf, sl, sTop, 'HYD'); rect2(Fr, -ci, sTop - 150, ci, H - 16, 'HYD_IND');
     rect2(Fr, -off - 40, H - 16, off + 40, H + 40, 'HYD');
@@ -594,18 +597,17 @@
     rect2(Fr, -(hw + thk) * K, uz(colA), (hw + thk) * K, uz(colA) + fd * K, 'FRAME_IND'); Fr.line([-hw * K, uz(colA) + fd * K], [hw * K, uz(colA) + fd * K], 'OUTLINE');
     Fr.text([0, H + 200], 'Belt frame', 0, 'HYD_IND', { rel: true, mid: true });
     Fr.text([0, H + 520], m.id + ' MOBILE LIFT STAND - FRONT VIEW (looking along the belt)', 0, 'TITLE', { rel: true, mid: true });
-    Fr.dim([-w2, 0], [w2, 0], -200, 'Base frame width ' + Math.round(2 * w2) + ' mm' + star(kw), kw);
+    Fr.dim([-w2, 0], [w2, 0], -200, 'Lift stand base width ' + Math.round(2 * w2) + ' mm' + star(kw), kw);
     Fr.dim([-(w2 - 40), 0], [w2 - 40, 0], -380, 'Castor centre to centre ' + Math.round(2 * (w2 - 40)) + ' mm *', 'ind');
     Fr.dim([w2 - 40 + 70, 0], [w2 - 40 + 70, 2 * R], -150, 'Wheel dia. ' + Math.round(2 * R) + ' mm *', 'ind');
     Fr.dim([w2, 0], [w2, H], -420, m.id + ' height to saddle ' + Math.round(H) + ' mm', 'calc');
     Fr.dim([-w2, 0], [-w2, cH], 140, 'Castor height ' + Math.round(cH) + ' mm' + star(kc), kc);
     Fr.dim([-(hw + thk) * K, uz(colA) + fd * K + 60], [(hw + thk) * K, uz(colA) + fd * K + 60], 120, 'Belt frame width ' + Math.round(2 * (hw + thk) * K) + ' mm', wKind);
-    Fr.dim([-w2, zf + hh], [w2, zf + hh], 160, 'Push handle width ' + Math.round(2 * w2) + ' mm *', 'ind');
 
-    row('Base frame length', a1 - a0, kb); row('Base frame width', 2 * w2, kw); row('Castor height (floor to frame)', cH, kc); row('Castor wheel diameter', 2 * R, 'ind'); row('Castor centre to centre (width)', 2 * (w2 - 40), 'ind');
-    row('Frame tube section (square)', tb, 'ind'); row('Frame top above floor', zf, kc === 'entered' ? 'calc' : 'ind', 'castor + tube'); row('Frame behind the pivot', -a0, 'ind'); row('Pivot to lift column', colA, 'calc', '85 % of the horizontal run');
+    row('Lift stand base length', a1 - a0, kb); row('Lift stand base width', 2 * w2, kw); row('Castor height (floor to frame)', cH, kc); row('Castor wheel diameter', 2 * R, 'ind'); row('Castor centre to centre (width)', 2 * (w2 - 40), 'ind');
+    row('Frame tube section (square)', tb, 'ind'); row('Frame top above floor', zf, kc === 'entered' ? 'calc' : 'ind', 'castor + tube'); row('Frame behind the pivot', -a0, 'ind'); row('Pivot to lift column', colA, 'calc', '60 % of the horizontal run');
     row('Lift column sleeve (square)', 2 * sl, 'ind'); row('Sleeve top above floor', sTop, 'ind'); row('Height floor to saddle (stand height)', H, 'calc', 'from the route'); row('Rod out above the barrel', rTop - tTop, 'ind');
-    row('Lift stroke (as entered)', m.stroke || 0, m.stroke ? 'entered' : 'ind', m.stroke ? '' : 'not entered'); row('Push handle height above frame', hh, 'ind'); row('Horizontal run of the belt', Hr, 'calc'); row('Rise of the belt', rise, 'calc');
+    row('Lift stroke (as entered)', m.stroke || 0, m.stroke ? 'entered' : 'ind', m.stroke ? '' : 'not entered'); row('Handle loop height above frame', hh, 'ind'); row('Yellow hand rail height above belt', rail, 'ind'); row('Horizontal run of the belt', Hr, 'calc'); row('Rise of the belt', rise, 'calc');
     row('Belt width', 2 * hw * K, wKind); row('Belt frame width (outside)', 2 * (hw + thk) * K, wKind);
     var notes = ['INDICATIVE drawing - for engineering review, not for manufacture.', 'Black dimensions = entered, red = calculated, grey (marked *) = indicative placeholder. Nothing here is a product selection.',
       'This tool does not select or size the frame, castors, lift cylinder, pump, motor, column, locking or load capacity. Engineering review required.', 'Cylinder / capacity as entered: ' + (m.rating || 'not entered') + '.  Pump unit: ' + (m.electric ? 'electric power pack' : 'hand pump') + '.'];
