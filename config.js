@@ -44,6 +44,6 @@ window.UCP_CONFIG = {
   // Show the "Load project JSON" button.
   // Login gate (register -> email OTP -> Ultraplast approval). OFF while endpoint is ''.
   // After deploying the /backend folder paste its address here, e.g. 'https://your-project.vercel.app/api'
-  auth: { endpoint: 'https://ultraplast-planner-api.vercel.app/api', timeoutMs: 20000 },
+  auth: { endpoint: 'https://ultraplast-planner-api.vercel.app/api/auth/login', timeoutMs: 20000 },
   allowImport: true
 };
