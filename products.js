@@ -47,6 +47,8 @@
       shortName: 'Ultraplast',
       website: 'https://www.ultraplastindia.com/',
       logoUrl: 'https://www.ultraplastindia.com/wp-content/uploads/2024/10/Ultra-Plast-Logo-For-Website.png',
+      logoLocal: 'assets/ultraplast-logo.png', // the company logo shipped with the site (page header); drawings keep logoUrl
+
       // Published on the Ultraplast "conveyor-system" page (2026-10-13). Re-verify before launch.
       enquiryEmail: 'info@ultraplastindia.in',
       salesEmail: 'sales@ultraplastindia.in', // printed on the catalogue back cover

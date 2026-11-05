@@ -47,6 +47,7 @@
   /* ---------------------------------------------------------------- gate UI */
   function inertPage(on) { ['header.top', '#main', 'footer'].forEach(function (s) { var el = $(s); if (!el) return; if (on) { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); } }); }
   function field(id, label, type, extra) { return '<label class="authf" for="' + id + '"><span>' + label + '</span><input id="' + id + '" name="' + id + '" type="' + (type || 'text') + '" ' + (extra || '') + ' autocomplete="off"><em class="err" id="e_' + id + '" role="alert"></em></label>'; }
+  function logoHtml() { var l = typeof document !== 'undefined' && document.getElementById('logo'), src = l && l.getAttribute('src'); if (!src) src = 'assets/ultraplast-logo.png'; return src && !(l && l.hidden) ? '<img src="' + esc(src) + '" alt="Ultraplast" height="44">' : '<span class="authtxt"><b>ULTRA</b>PLAST</span>'; }
   function gateHtml(msg) {
     var tabs = '<div class="authtabs" role="tablist"><button type="button" role="tab" data-astep="login" aria-selected="' + (step === 'login') + '">Login</button><button type="button" role="tab" data-astep="register" aria-selected="' + (step === 'register' || step === 'otp') + '">Register</button></div>', body = '';
     if (step === 'login') body = '<form id="authForm" novalidate><h3>Login</h3>' + field('aEmail', 'Email', 'email', 'inputmode="email" autocomplete="username"') + field('aPass', 'Password', 'password', 'autocomplete="current-password"') + '<p class="err" id="aMsg" role="alert">' + esc(msg || '') + '</p><button class="btn primary" type="submit" id="aGo">Login</button><p class="note">First time here? Press <b>Register</b>. After you verify your email, Ultraplast approves your request and then you can log in.</p></form>';
@@ -55,7 +56,7 @@
       field('rPass', 'Create password', 'password', 'autocomplete="new-password"') + field('rPass2', 'Repeat password', 'password', 'autocomplete="new-password"') + '<p class="err" id="aMsg" role="alert">' + esc(msg || '') + '</p><button class="btn primary" type="submit" id="aGo">Send verification code</button></form>';
     else if (step === 'otp') body = '<form id="authForm" novalidate><h3>Verify your email</h3><p>We sent a 6-digit code to <b>' + esc(pendingEmail) + '</b>. It is valid for a few minutes.</p>' + field('oCode', '6-digit code', 'text', 'inputmode="numeric" maxlength="6" pattern="[0-9]*"') + '<p class="err" id="aMsg" role="alert">' + esc(msg || '') + '</p><button class="btn primary" type="submit" id="aGo">Verify</button> <button class="btn ghost" type="button" id="aResend">Resend code</button></form>';
     else body = '<div id="authForm"><h3>Request submitted</h3><p class="ok" role="status">' + esc(msg || '') + '</p><p class="note">You will get an email when Ultraplast approves your access. Then come back here and log in.</p><button class="btn primary" type="button" data-astep="login">Back to login</button></div>';
-    return '<div class="authbox" role="dialog" aria-modal="true" aria-labelledby="authBrand"><div class="authbrand" id="authBrand"><b>ULTRA</b>PLAST <small>Smart Conveyor Planner</small></div>' + (step === 'done' ? '' : tabs) + body + '</div>';
+    return '<div class="authbox" role="dialog" aria-modal="true" aria-labelledby="authBrand"><div class="authbrand" id="authBrand">' + logoHtml() + '<small>Smart Conveyor Planner &amp; Estimator</small></div>' + (step === 'done' ? '' : tabs) + body + '</div>';
   }
   function showGate(msg) {
     if (typeof document === 'undefined') return; locked = true;
@@ -104,11 +105,11 @@
 
   /* ---------------------------------------------------------------- header bar (after login) */
   function installBar() {
-    if (typeof document === 'undefined' || !user) return; var host = $('header.top .tools') || $('header.top .wrap') || $('header.top'); if (!host) return;
+    if (typeof document === 'undefined' || !user) return; var host = $('header.top .bar') || $('header.top .tools') || $('header.top .wrap') || $('header.top'); if (!host) return;
     var old = $('#authBar'); if (old) old.remove();
     var bar = document.createElement('span'); bar.id = 'authBar'; bar.className = 'authbar';
     bar.innerHTML = '<span class="authwho" title="' + esc(user.email) + '">' + esc(user.name) + (user.company ? ' &middot; ' + esc(user.company) : '') + '</span>' + (user.role === 'admin' ? '<button type="button" class="btn gold sm" id="btnSettings" title="Admin settings: users, mail, database">Settings</button>' : '') + '<button type="button" class="btn ghost sm" id="btnLogout">Logout</button>';
-    host.appendChild(bar);
+    host.appendChild(bar); try { window.dispatchEvent(new Event('resize')); } catch (e) { /* header height refresh only */ }
     bar.addEventListener('click', function (e) { var b = e.target.closest ? e.target.closest('button') : null; if (!b) return; if (b.id === 'btnLogout') logout(); else if (b.id === 'btnSettings' && typeof window !== 'undefined' && window.UCPSettings) window.UCPSettings.open({ api: api, user: user }); });
   }
   function logout() { token = ''; user = null; store('clear'); var b = $('#authBar'); if (b) b.remove(); if (typeof window !== 'undefined' && window.UCPSettings) window.UCPSettings.close(); step = 'login'; showGate('You are logged out.'); }

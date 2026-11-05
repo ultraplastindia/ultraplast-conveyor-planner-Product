@@ -1230,7 +1230,7 @@
   function init() {
     setHdr();
     if (!C || !P || !R || !E || !S) { document.getElementById('app').innerHTML = '<p class="banner bad">The calculator could not start because a script failed to load. Please reload the page.</p>'; return; }
-    var logo = $('#logo'); if (logo) { logo.src = P.company.logoUrl; logo.addEventListener('error', function () { logo.hidden = true; $('#logoText').hidden = false; }); }
+    var logo = $('#logo'); if (logo) { logo.src = P.company.logoLocal || P.company.logoUrl; logo.addEventListener('error', function () { if (P.company.logoLocal && P.company.logoUrl && logo.getAttribute('src') !== P.company.logoUrl) { logo.src = P.company.logoUrl; return; } logo.hidden = true; $('#logoText').hidden = false; }); }
     var SH = window.UCPSheets;
     var go0 = function (res) {
       var ds = $('#dataSource');
