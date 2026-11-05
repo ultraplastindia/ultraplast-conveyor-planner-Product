@@ -42,5 +42,8 @@ window.UCP_CONFIG = {
   // recheckMs = how often an open page re-checks that access was not revoked.
   costing: { enabled: false, recheckMs: 120000 },
   // Show the "Load project JSON" button.
+  // Login gate (register -> email OTP -> Ultraplast approval). OFF while endpoint is ''.
+  // After deploying the /backend folder paste its address here, e.g. 'https://your-project.vercel.app/api'
+  auth: { endpoint: '', timeoutMs: 20000 },
   allowImport: true
 };
