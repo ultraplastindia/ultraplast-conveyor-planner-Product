@@ -472,3 +472,15 @@ table tbody tr:hover td{background:#fafbfd}
 @media(max-width:760px){.top .tools{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;scrollbar-width:thin}.top .tools>*{flex:none}}
 .top + main,.top ~ main{padding-top:18px}
 @media(max-width:760px){.top .bar{padding-top:8px;padding-bottom:6px;gap:6px 10px}.top .brand{padding:4px 10px}.top .brand img{height:34px}.top .tools{padding-top:6px;padding-bottom:4px}.top .tools .btn.sm,.top .chk.sm{min-height:34px}}
+
+/* ---- Results: collapsible sections (the 3D conveyor stays open) ---- */
+.ccbar{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px;margin:4px 0 14px}
+.ccbar .note{margin:0;flex:1 1 260px}
+h3.cch{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;user-select:none;margin-top:0}
+h3.cch::after{content:"";flex:none;width:9px;height:9px;margin:0 6px 3px 0;border-right:2.5px solid currentColor;border-bottom:2.5px solid currentColor;transform:rotate(-135deg);transition:transform .2s;opacity:.7}
+.card.cc>h3.cch::after{transform:rotate(45deg);margin-bottom:5px}
+h3.cch:hover{color:var(--red-d)}
+.card.cc{padding-top:14px;padding-bottom:14px}
+@media screen{.card.cc>*:not(h3){display:none !important}}
+.card.cc>h3{margin-bottom:0}
+@media print{.ccbar{display:none}h3.cch::after{display:none}.card.cc{padding-top:inherit;padding-bottom:inherit}}

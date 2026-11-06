@@ -543,6 +543,29 @@
     wrap.innerHTML = h.join(''); convDom(wrap);
     start3d(inp, res); fillHydPanels(); fillMovPanel(); if (costEnabled()) initCost(inp, res);
     updateEnquiryStatus();
+    collapseResults(wrap);
+  }
+
+  /* ---- Results page: only the 3D conveyor stays open; every other section is collapsed and opens on click ---- */
+  var ccObs = null;
+  function ccHead(card) { return card.querySelector(':scope > h3'); }
+  function ccDecorate(card) { var hd = ccHead(card); if (!hd || hd.classList.contains('cch')) return; hd.classList.add('cch'); hd.setAttribute('tabindex', '0'); hd.setAttribute('role', 'button'); hd.setAttribute('aria-expanded', String(!card.classList.contains('cc'))); }
+  function ccSet(card, open) { if (!card || card.id === 'simCard') return; card.classList.toggle('cc', !open); var hd = ccHead(card); if (hd) hd.setAttribute('aria-expanded', String(!!open)); }
+  function ccOpenEl(el) { var c = el && el.closest ? el.closest('.card') : null; if (c) ccSet(c, true); }
+  function ccAll(open) { var w = $('#resultsBody'); if (!w) return; [].forEach.call(w.querySelectorAll('section.card'), function (c) { ccSet(c, open); }); }
+  function collapseResults(wrap) {
+    if (!wrap) return; var cards = wrap.querySelectorAll('section.card');
+    [].forEach.call(cards, function (c) { if (c.id === 'simCard') return; c.classList.add('cc'); ccDecorate(c); });
+    var rs = state.result && state.result.res; if (rs && rs.issues && rs.issues.some(function (i) { return i.level === 'error'; })) { [].forEach.call(cards, function (c) { var hd = ccHead(c); if (hd && hd.textContent === 'Checks and flags') ccSet(c, true); }); }   // problems are never hidden
+    var bn = wrap.querySelector('.banner');
+    var bar = '<div class="ccbar"><button type="button" class="btn ghost sm" data-cc="open">Expand all</button><button type="button" class="btn ghost sm" data-cc="close">Collapse all</button><span class="note">The 3D conveyor is always shown. Tap a heading below (drawings and export, details, costing, enquiry) to open or close it.</span></div>';
+    if (bn) bn.insertAdjacentHTML('afterend', bar); else wrap.insertAdjacentHTML('afterbegin', bar);
+    var cc = $('#costCard'); if (ccObs) { ccObs.disconnect(); ccObs = null; }
+    if (cc && typeof MutationObserver === 'function') { ccObs = new MutationObserver(function () { ccDecorate(cc); }); ccObs.observe(cc, { childList: true }); }
+  }
+  function ccClick(e) {
+    var b = e.target.closest ? e.target.closest('[data-cc]') : null; if (b) { ccAll(b.getAttribute('data-cc') === 'open'); return; }
+    var hd = e.target.closest ? e.target.closest('.card > h3.cch') : null; if (hd) { var c = hd.parentNode; ccSet(c, c.classList.contains('cc')); }
   }
 
   function simPlan(inp, res) {
@@ -889,11 +912,11 @@
   }
   function openCosting() {
     if (!ACC) { toast('Costing is not available (a script failed to load). Please reload.'); return; }
-    if (costEnabled()) { var c0 = $('#costCard'); if (c0) c0.scrollIntoView({ behavior: 'smooth', block: 'start' }); else toast('Costing is on. Finish the steps to see the cost estimate on the results page.'); return; }
+    if (costEnabled()) { var c0 = $('#costCard'); if (c0) { ccOpenEl(c0); c0.scrollIntoView({ behavior: 'smooth', block: 'start' }); } else toast('Costing is on. Finish the steps to see the cost estimate on the results page.'); return; }
     ACC.gate(CFG.enquiry).then(function (ok) {
       if (!ok) return;
       costGranted = true; startRecheck(); var b = $('#btnCosting'); if (b) b.classList.add('on');
-      if (state.step === 5) { render(false); var c1 = $('#costCard'); if (c1) c1.scrollIntoView({ behavior: 'smooth', block: 'start' }); } else toast('Costing approved. Finish the steps to see the cost estimate on the results page.');
+      if (state.step === 5) { render(false); var c1 = $('#costCard'); if (c1) { ccOpenEl(c1); c1.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } else toast('Costing approved. Finish the steps to see the cost estimate on the results page.');
     });
   }
   function costQ() { var plan = simPlan(costCtx.inp, costCtx.res), sc = V3.buildScene(v3dScene(costCtx.inp, costCtx.res, plan, false)); return K.quantities(costCtx.inp, costCtx.res, { legs: sc.empty ? null : sc.legCount, beltWidthM: plan.widthM }); }
@@ -1110,6 +1133,8 @@
     document.addEventListener('change', function (e) { var t = e.target; if (t.getAttribute && t.getAttribute('data-mov') !== null && !(t.closest && t.closest('form'))) { movToggle(t); return; } if (t.getAttribute && t.getAttribute('data-fix') && !(t.closest && t.closest('form'))) fixApply(t); });
     document.addEventListener('input', function (e) { var t = e.target; if (t.getAttribute && t.getAttribute('data-movk') !== null && !(t.closest && t.closest('form'))) { movSlide(t); return; } if (t.getAttribute && t.getAttribute('data-hydlift') !== null && !(t.closest && t.closest('form'))) hydSlide(t); });
     document.addEventListener('input', function (e) { var c = e.target.getAttribute && e.target.getAttribute('data-contact'); if (c) { state.contact[c] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; } });
+    document.addEventListener('click', ccClick);
+    document.addEventListener('keydown', function (e) { if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('cch')) { e.preventDefault(); ccClick(e); } });
     document.addEventListener('change', function (e) { var c = e.target.getAttribute && e.target.getAttribute('data-contact'); if (c) state.contact[c] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; });
     document.addEventListener('submit', function (e) { if (e.target.id === 'enqForm') onSubmitEnquiry(e); });
     $$('input[name="units"]').forEach(function (r) { r.addEventListener('change', function () { if (r.checked) switchUnits(r.value); }); });
