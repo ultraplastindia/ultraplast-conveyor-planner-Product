@@ -115,6 +115,7 @@
     (path.details || []).forEach(function (d, i) {
       var r = { no: i + 1, type: d.type, lengthM: d.length, horizontalM: d.horizontal, startZ: zs[d.p0], endZ: zs[d.p1] };
       if (d.type === 'curve') { r.radiusM = d.radius; r.angleDeg = d.angle; r.direction = d.direction; }
+      if (d.spiral) { r.spiral = true; r.riseM = d.rise; r.slopeDeg = d.slopeDeg; r.pitchM = d.pitch; r.turns = d.turns; }
       if (d.type === 'incline') { r.riseM = d.rise; r.slopeDeg = d.angle; }
       out.segments.push(r);
     });
@@ -213,10 +214,12 @@
     for (i = 0; i < nArrows; i++) sc.arrows.push({ s: total * (i + 0.5) / nArrows, size: Math.max(0.03, Math.min(0.15, W_ * 0.22)) });
 
     // side frame + guide rails (indicative)
+    var slopedRoute = (path.details || []).some(function (d) { return d.type === 'incline' || d.spiral || d.hyd; }), showGuide = !slopedRoute || !!inp.guideRails;   // inclined / declined / hydraulic / spiral conveyors get guide + hand rails only when the user enables them
     var prodH = inp.prod && pos(inp.prod.heightMm) ? inp.prod.heightMm / 1000 : null, gH = prodH !== null ? Math.min(IND.guideH, prodH * 0.5) : IND.guideH;
     [1, -1].forEach(function (sg) {
       var sec = sg > 0 ? [[hw, -fd], [hw + thk, -fd], [hw + thk, 0.015], [hw, 0.015]] : [[-hw - thk, -fd], [-hw, -fd], [-hw, 0.015], [-hw - thk, 0.015]];
       var pl = extrude(sts, sec, COL.frame, { tag: 'frame' }); pl.sides.forEach(function (r) { r.forEach(function (q) { sc.polys.push(q); }); }); pl.caps.forEach(function (q) { sc.polys.push(q); });
+      if (!showGuide) return;
       var g0 = sg > 0 ? hw : -hw - IND.guideThk, gsec = [[g0, 0.015], [g0 + IND.guideThk, 0.015], [g0 + IND.guideThk, 0.015 + gH], [g0, 0.015 + gH]];
       var gr = extrude(sts, gsec, COL.guide, { tag: 'frame' }); gr.sides.forEach(function (r) { r.forEach(function (q) { sc.polys.push(q); }); }); gr.caps.forEach(function (q) { sc.polys.push(q); });
     });
@@ -233,13 +236,16 @@
     // support legs (indicative spacing unless configured)
     var spacing = pos(inp.legSpacingMm) ? inp.legSpacingMm / 1000 : IND.legSpacing, legPos = [];
     if (total < 0.6) legPos = [total / 2]; else { var nSeg = Math.max(1, Math.ceil((total - 0.5) / spacing)); for (i = 0; i <= nSeg; i++) legPos.push(0.25 + (total - 0.5) * i / nSeg); }
-    sc.legCount = 0; sc.legs = []; sc.rollerR = R; sc.hw = hw; sc.thk = thk; sc.fd = fd; sc.guideH = gH;
+    sc.legCount = 0; sc.legs = []; sc.rollerR = R; sc.hw = hw; sc.thk = thk; sc.fd = fd; sc.guideH = showGuide ? gH : 0; sc.guideOn = showGuide; sc.slopedRoute = slopedRoute;
+    if (slopedRoute && !showGuide) sc.notes.push('Side guide rails and hand rails are not drawn: this route has an incline, decline, hydraulic stand or spiral, and the option "Side guide rails required" is off. Tick it in step 3 (Washdown, guarding and safety) to add them.');
     sc.motorBox = userMotor ? null : { p: fE.p, t: fE.t, l: fE.l, u: fE.u, rt: [-0.30, -0.04], rl: [hw + thk + 0.02, hw + thk + 0.18], ru: [-0.20, -0.04] };
     sc.obstacles = (inp.obstacles || []).filter(function (b) { return pos(b.w) && pos(b.d) && num(b.x) && num(b.y); }).map(function (b, i) { return { x: b.x, y: b.y, w: b.w, d: b.d, h: IND.obstacleH, name: b.name || 'Obstacle ' + (i + 1) }; });
     var hydSeg = details.filter(function (d) { return d.type === 'incline' && d.hyd && pos(Math.abs(d.rise)); }), hydRanges = hydSeg.map(function (d) { return [track.cum[d.p0], track.cum[d.p1]]; });
+    var spiralSeg = details.filter(function (d) { return d.spiral && d.centre; }), spiralRanges = spiralSeg.map(function (d) { return [track.cum[d.p0], track.cum[d.p1]]; });
     var wholeMobile = hydSeg.some(function (d) { return d.hydStyle === 'mobile'; });   // a movable conveyor is one free-standing unit: no fixed legs anywhere
     legPos.forEach(function (s) {
       if (wholeMobile) return;
+      if (spiralRanges.some(function (r) { return s > r[0] - 0.05 && s < r[1] + 0.05; })) return;   // the centre column and radial arms carry the spiral
       if (hydRanges.some(function (r) { return s > r[0] + 0.15 && s < r[1] - 0.15; })) return;   // the hydraulic stands carry this stretch
       var pt = track.at(s), tH = norm([pt.tx, pt.ty, 0]), lH = norm([-tH[1], tH[0], 0]), uu = [0, 0, 1], slopeCos = Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz));
       var zb = pt.z - fd * slopeCos; if (zb < 0.06) return;
@@ -252,6 +258,28 @@
       });
       obox(P0, tH, lH, uu, [-0.015, 0.015], [-off, off], [zb - 0.05, zb - 0.02], COL.leg, { tag: 'support' }).forEach(function (q) { sc.polys.push(q); });
     });
+
+    /* ----- spiral: central column, base plate and radial support arms (indicative - Ultraplast engineering defines the structure) ----- */
+    sc.spirals = [];
+    spiralSeg.forEach(function (d, si) {
+      var cx = d.centre.x, cy = d.centre.y, ps = [], k, zTop = 0, zLo = 1e9;
+      for (k = d.p0; k <= d.p1; k++) { var q = pts3[k]; zTop = Math.max(zTop, q[2]); zLo = Math.min(zLo, q[2]); }
+      var inner = Math.max(0.05, d.radius - hw - thk), cR = Math.min(0.12, inner * 0.35), colTop = zTop - fd - 0.02;
+      if (colTop > 0.1) {
+        cylinder({ p: [cx, cy, 0], t: [1, 0, 0], l: [0, 0, 1], u: [0, 1, 0] }, cR, 0, colTop, COL.leg, { tag: 'support' }).forEach(function (q) { sc.polys.push(q); });
+        cylinder({ p: [cx, cy, 0], t: [1, 0, 0], l: [0, 0, 1], u: [0, 1, 0] }, Math.min(cR * 2.4, d.radius * 0.5), 0, 0.012, COL.leg, { tag: 'support' }).forEach(function (q) { sc.polys.push(q); });
+      }
+      var s0 = track.cum[d.p0], s1 = track.cum[d.p1], nA = Math.max(2, Math.round((s1 - s0) / 0.9));
+      for (k = 0; k <= nA; k++) {
+        var pt = track.at(s0 + (s1 - s0) * k / nA), dx = pt.x - cx, dy = pt.y - cy, dl = Math.sqrt(dx * dx + dy * dy); if (dl < 1e-6) continue;
+        var tt = [dx / dl, dy / dl, 0], ll = [-tt[1], tt[0], 0], zb = pt.z - fd - 0.04; if (zb < 0.08) continue;
+        obox([cx, cy, 0], tt, ll, [0, 0, 1], [cR * 0.6, dl], [-0.02, 0.02], [zb - 0.03, zb + 0.01], COL.leg, { tag: 'support' }).forEach(function (q) { sc.polys.push(q); });
+        if (pt.z - fd > 0.3) obox([cx, cy, 0], tt, ll, [0, 0, 1], [cR * 0.6 + (dl - cR * 0.6) * 0.15, cR * 0.6 + (dl - cR * 0.6) * 0.15 + 0.03], [-0.012, 0.012], [Math.max(0.02, colTop * 0.35), zb - 0.03], COL.leg, { tag: 'support' }).forEach(function (q) { sc.polys.push(q); });
+      }
+      sc.legCount += 1;
+      sc.spirals.push({ seg: details.indexOf(d) + 1, cx: cx, cy: cy, radius: d.radius, turns: d.turns, rise: d.rise, pitch: d.pitch, colR: cR, colTop: colTop });
+    });
+    if (spiralSeg.length) sc.notes.push('Spiral section: centre column, base plate and radial arms are INDICATIVE placeholders. The belt type for the helix, the column and arm structure, the drive and the guarding are engineered by Ultraplast; nothing is sized here.');
 
     /* ----- hydraulic adjustable stands under incline / decline segments (indicative; sizes are placeholders, never a selection) ----- */
     sc.hyd = []; sc.hydPump = []; sc.hydPivots = []; sc.hydK = { plate: 0.11, tubeR: 0.042, rodR: 0.026, pumpHL: 0.13, pumpHW: 0.09, guide: 0.11, sleeve: 0.025, colR: 0.018 };
@@ -293,7 +321,7 @@
         [hA, hB].forEach(function (a) { box(a, hl, [-0.012, 0.012], [-0.012, 0.012], zf, zf + m.handleH, HY.base); });
         bar([P(hA, hl)[0], P(hA, hl)[1], zf + m.handleH], [P(hB, hl)[0], P(hB, hl)[1], zf + m.handleH], 0.014, HY.base);
         // yellow hand rails along both sides of the incline (posts on the side channel, rail 500 mm above the belt)
-        (function () {
+        if (showGuide) (function () {
           var sA = s0 + 0.3, sB = s1 - 0.3, n = Math.max(1, Math.round((sB - sA) / 1.2)), rr = hw + thk + 0.03, YL = [244, 196, 22];
           [1, -1].forEach(function (sg) { var prev = null; for (var q = 0; q <= n; q++) { var qq = track.at(sA + (sB - sA) * q / n), tq = norm([qq.tx, qq.ty, 0]), lq = [-tq[1], tq[0], 0], bx0 = qq.x + lq[0] * rr * sg, by0 = qq.y + lq[1] * rr * sg, top = [bx0, by0, qq.z + m.railH];
             bar([bx0, by0, qq.z - 0.08], top, 0.012, YL); if (prev) bar(prev, top, 0.014, YL); prev = top; } });
@@ -532,22 +560,27 @@
       var n = k + 1, m = Math.round((d.p0 + d.p1) / 2), pm = pts3[m], txt = 'S' + n;
       if (detail && details.length <= 10) {
         if (d.type === 'straight') txt += ' Straight ' + fmt(d.length);
+        else if (d.spiral) txt += ' Spiral ' + (d.direction === 'right' ? 'right' : 'left') + ' R ' + fmtMm(d.radius * 1000) + ' × ' + (Math.round(d.turns * 100) / 100) + ' turns · rise ' + fmtMm(Math.abs(d.rise) * 1000) + ' · pitch ' + fmtMm(d.pitch * 1000);
         else if (d.type === 'curve') txt += ' Curve ' + (d.direction === 'right' ? 'right' : 'left') + ' R ' + fmtMm(d.radius * 1000) + ' × ' + Math.round(d.angle * 10) / 10 + '° (arc ' + fmt(d.length) + ')';
         else txt += ' Incline ' + fmt(d.length) + ' · rise ' + fmtMm(Math.abs(d.rise) * 1000) + ' · ' + Math.round(Math.abs(d.angle) * 10) / 10 + '°';
       }
       tag([pm[0], pm[1], pm[2] + 0.3 + (prodH || 0)], txt, 'seg', 'S' + n);
       if (!detail) return;
       var a = pts3[d.p0], b = pts3[d.p1];
-      if (d.type === 'curve' && pos(d.radius)) {
+      if (d.spiral && d.centre) {
+        dim([d.centre.x, d.centre.y, a[2]], [pm[0], pm[1], a[2]], 'R ' + fmtMm(d.radius * 1000), 'entered', { dashed: true, off: [0, -8] });
+        var ca = [d.centre.x, d.centre.y, Math.min(a[2], b[2])], cb = [d.centre.x, d.centre.y, Math.max(a[2], b[2])];
+        dim(ca, cb, 'Rise ' + fmtMm(Math.abs(d.rise) * 1000), 'entered', { off: [6, 0] });
+      } else if (d.type === 'curve' && pos(d.radius)) {
         var tt = norm(sub(pts3[Math.min(d.p0 + 1, pts3.length - 1)], a)); tt[2] = 0; tt = norm(tt);
         var sg = d.direction === 'right' ? -1 : 1, cen = [a[0] + sg * d.radius * (-tt[1]), a[1] + sg * d.radius * tt[0], a[2]];
-        dim(cen, [pm[0], pm[1], a[2]], 'R ' + fmtMm(d.radius * 1000), 'calc', { dashed: true, off: [0, -8] });
+        dim(cen, [pm[0], pm[1], a[2]], 'R ' + fmtMm(d.radius * 1000), 'entered', { dashed: true, off: [0, -8] });
       }
       if (d.type === 'incline') {
         var th = norm([b[0] - a[0], b[1] - a[1], 0]), lh = [-th[1], th[0], 0], o2 = hw + thk + 0.3, zLo = Math.min(a[2], b[2]);
         var pa = [a[0] + lh[0] * o2, a[1] + lh[1] * o2, zLo], pb = [b[0] + lh[0] * o2, b[1] + lh[1] * o2, zLo], pc = [pb[0], pb[1], Math.max(a[2], b[2])];
         dim(pa, pb, 'Run ' + fmt(d.horizontal), 'calc', { dashed: true, off: [0, 12] });
-        dim(pb, pc, 'Rise ' + fmtMm(Math.abs(d.rise) * 1000), 'calc', { off: [6, 0] });
+        dim(pb, pc, 'Rise ' + fmtMm(Math.abs(d.rise) * 1000), 'entered', { off: [6, 0] });
       }
     });
     if (!(sc.floor)) { sc.floorUnknown = true; }

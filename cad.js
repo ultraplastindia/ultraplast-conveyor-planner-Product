@@ -138,7 +138,15 @@
       var qa = tr.at(sS), qb = tr.at(sE), A = [qa.x * MM, qa.y * MM], B = [qb.x * MM, qb.y * MM];
       var label = 'S' + (k + 1) + ' ';
       if (d.type === 'straight') { P.dim(A, B, 480 + (k % 3) * 300, label + 'Straight ' + mmTxt(d.length), 'calc'); }
-      else if (d.type === 'curve') {
+      else if (d.spiral && d.centre) {
+        var cs = [d.centre.x * MM, d.centre.y * MM], rin = Math.max(0, d.radius - hw - thk) * MM, rout = (d.radius + hw + thk) * MM, mS = tr.at((sS + sE) / 2);
+        P.circle(cs, d.radius * MM, 'CENTRE'); P.circle(cs, rin, 'OUTLINE'); P.circle(cs, rout, 'OUTLINE');
+        var sp0 = (sc.spirals || []).filter(function (q) { return q.seg === k + 1; })[0]; if (sp0) P.circle(cs, sp0.colR * MM, 'SUPPORT_IND');
+        P.line(cs, [mS.x * MM, mS.y * MM], 'DIM_CALC'); P.circle(cs, 25, 'DIM_CALC');
+        P.text([cs[0], cs[1] - 380], label + 'Spiral ' + (d.direction === 'right' ? 'R' : 'L') + ' R' + Math.round(d.radius * MM) + ' x ' + (Math.round(d.turns * 100) / 100) + ' turns, rise ' + mmTxt(Math.abs(d.rise)) + ' (entered)', 0, 'DIM_ENTERED', { rel: true, mid: true });
+        P.text([cs[0], cs[1] - 640], 'Pitch ' + mmTxt(d.pitch) + ', centre line ' + mmTxt(d.length) + ', slope ' + ang(Math.abs(d.slopeDeg)) + ' (calculated)', 0, 'DIM_CALC', { rel: true, mid: true });
+        P.text([cs[0], cs[1] + 300], 'Centre column and arms INDICATIVE', 0, 'DIM_IND', { rel: true, mid: true });
+      } else if (d.type === 'curve') {
         var mid = tr.at((sS + sE) / 2), sgn = d.direction === 'right' ? -1 : 1, tt = [qa.tx, qa.ty], cen = [(qa.x + sgn * d.radius * -tt[1]) * MM, (qa.y + sgn * d.radius * tt[0]) * MM];
         P.line(cen, [mid.x * MM, mid.y * MM], 'DIM_CALC'); P.circle(cen, 25, 'DIM_CALC');
         P.text([cen[0] + sgn * 0, cen[1] - 380], label + 'Curve ' + (d.direction === 'right' ? 'R' : 'L') + ' R' + Math.round(d.radius * MM) + ' x ' + ang(d.angle) + ' (arc ' + mmTxt(d.length) + ')', 0, 'DIM_CALC', { rel: true, mid: true });
@@ -162,7 +170,8 @@
     E.line([-300, 0], [totalH + 300, 0], 'FLOOR');
     E.poly(top, false, 'OUTLINE'); E.poly(top.map(function (p) { return [p[0], p[1] - 12]; }), false, 'OUTLINE');
     E.poly(top.map(function (p) { return [p[0], p[1] - fd * MM]; }), false, 'FRAME_IND');
-    E.poly(top.map(function (p) { return [p[0], p[1] + 15 + sc.guideH * MM]; }), false, 'GUIDE_IND');
+    if (sc.guideOn !== false) E.poly(top.map(function (p) { return [p[0], p[1] + 15 + sc.guideH * MM]; }), false, 'GUIDE_IND');
+    (sc.spirals || []).forEach(function (q) { var d0 = M.inp.path.details[q.seg - 1], xm = sh.at((sc.track.cum[d0.p0] + sc.track.cum[d0.p1]) / 2) * MM, cw = q.colR * MM; E.poly([[xm - cw, 0], [xm + cw, 0], [xm + cw, q.colTop * MM], [xm - cw, q.colTop * MM]], true, 'SUPPORT_IND'); E.text([xm, q.colTop * MM + 120], 'S' + q.seg + ' spiral centre column (IND) - helix developed along the route', 0, 'DIM_IND', { rel: true, mid: true }); });
     sc.legs.forEach(function (g) { var x = sh.at(g.s) * MM, s = g.sec * MM; E.poly([[x - s, 0], [x + s, 0], [x + s, g.zb * MM], [x - s, g.zb * MM]], true, 'SUPPORT_IND'); });
     (sc.hyd || []).forEach(function (h, i) {   // hydraulic stands (side)
       if (h.style === 'mobile') return;   // base plate, barrel, chrome rod, saddle, cross-beam (twin stands)
@@ -206,7 +215,7 @@
     details.forEach(function (d, k) {
       var x1 = xa + d.horizontal * MM, za = sts[0].p[2] * MM; var iz = (function () { var s0 = 0; for (var q = 0; q < k; q++) s0 += details[q].length; return [sc.track.at(s0).z * MM, sc.track.at(s0 + d.length).z * MM]; })();
       E.line([xa, iz[0] - fd * MM - 120], [xa, dimY + 100], 'CENTRE');
-      E.dim([xa, dimY - 150], [x1, dimY - 150], 150 + (k % 2) * 330, 'S' + (k + 1) + ' ' + (d.type === 'incline' ? 'incline run ' + mmTxt(d.horizontal) + ' | slope ' + mmTxt(Math.hypot(d.horizontal, d.rise)) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | ' + ang(Math.abs(d.angle)) : d.type + ' ' + mmTxt(d.length)), 'calc');
+      E.dim([xa, dimY - 150], [x1, dimY - 150], 150 + (k % 2) * 330, 'S' + (k + 1) + ' ' + (d.type === 'incline' ? 'incline run ' + mmTxt(d.horizontal) + ' | slope ' + mmTxt(Math.hypot(d.horizontal, d.rise)) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | ' + ang(Math.abs(d.angle)) : d.spiral ? 'spiral ' + mmTxt(d.length) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | slope ' + ang(Math.abs(d.slopeDeg)) : d.type + ' ' + mmTxt(d.length)), 'calc');
       xa = x1;
     });
     E.line([xa, 0], [xa, dimY + 100], 'CENTRE');
@@ -360,8 +369,38 @@
     });
     return { title: 'HYDRAULIC STAND SCHEDULE - height calculated from the route; * = placeholder / not entered. Cylinder, pump and capacity are NOT selected or sized by this tool', head: ['Tag', 'Segment', 'From inlet (mm, along route)', 'Stand height to frame (mm)', 'Rod out (mm)', 'Stroke (mm, as entered)', 'Cylinder / capacity (as entered)', 'Stands', 'Pump unit'], rows: rows };
   }
+  /** Every component and option drawn, with its size and where the size comes from. Nothing here is selected or sized by the tool. */
+  function compSchedule(M) {
+    var sc = M.sc, g = sc.geom, inp = M.inp, rows = [], E = 'entered', Cc = 'calculated', I = 'indicative *';
+    function add(item, val, basis, note) { rows.push([item, val, basis, note || '']); }
+    var wKind = inp.beltWidthMm ? E : Cc;
+    add('Belt / chain width', mmS(g.widthM) + ' mm', wKind, wKind === E ? '' : 'Engineering confirms the width');
+    add('Frame width (outside)', mmS(2 * (sc.hw + sc.thk)) + ' mm', wKind === E ? Cc : I, 'belt width + frame thickness each side');
+    add('Frame depth', mmS(g.frameDepth) + ' mm', I, 'placeholder section');
+    add('Belt thickness', mmS(sc.thk) + ' mm', I, 'placeholder');
+    add('End roller / sprocket diameter', mmS(2 * sc.rollerR) + ' mm', I, 'not sized from pitch / teeth here');
+    add('Route length', mmS(g.totalM) + ' mm', Cc, '');
+    var legs = sc.legs || [], lz = legs.map(function (l) { return l.zb; });
+    if (legs.length) { add('Support legs', legs.length + ' off', I, 'quantity from spacing'); add('Leg spacing', mmS(pos(inp.legSpacingMm) ? inp.legSpacingMm / 1000 : 1.5) + ' mm', pos(inp.legSpacingMm) ? E : I, ''); add('Leg height range (floor to frame)', mmS(Math.min.apply(null, lz)) + ' - ' + mmS(Math.max.apply(null, lz)) + ' mm', Cc, 'from the route heights'); add('Leg section (square)', '40 mm', I, 'placeholder'); }
+    else add('Support legs', 'none drawn', I, (sc.hyd && sc.hyd.length) ? 'carried by the hydraulic / mobile stands' : (sc.spirals && sc.spirals.length ? 'carried by the spiral centre column and arms' : ''));
+    if (sc.guideOn !== false) { add('Side guide rails', 'ON, both sides', E, 'option ticked or flat route'); add('Guide rail height above belt', mmS(sc.guideH) + ' mm', I, 'placeholder'); add('Guide rail thickness', '12 mm', I, 'placeholder'); add('Guide rail length (each side)', mmS(g.totalM) + ' mm', Cc, 'full route length'); }
+    else add('Side guide rails / hand rails', 'NOT ADDED', E, 'option off on an incline, decline, hydraulic or spiral route');
+    (sc.spirals || []).forEach(function (q) {
+      var d = M.inp.path.details[q.seg - 1], tag = 'Spiral S' + q.seg + ' ';
+      add(tag + 'centre-line radius', mmS(d.radius) + ' mm', E, ''); add(tag + 'turns', String(Math.round(d.turns * 100) / 100), E, ''); add(tag + 'total rise', mmS(Math.abs(d.rise)) + ' mm', E, d.rise < 0 ? 'descending' : 'rising');
+      add(tag + 'pitch per turn', mmS(d.pitch) + ' mm', Cc, ''); add(tag + 'slope on centre line', Math.round(Math.abs(d.slopeDeg) * 10) / 10 + ' deg', Cc, 'needs engineering review');
+      add(tag + 'centre-line length', mmS(d.length) + ' mm', Cc, ''); add(tag + 'inner radius of belt', mmS(Math.max(0, d.radius - sc.hw - sc.thk)) + ' mm', wKind === E ? Cc : I, wKind === E ? '' : 'uses the illustrative belt width'); add(tag + 'outer radius of belt', mmS(d.radius + sc.hw + sc.thk) + ' mm', Cc, '');
+      add(tag + 'footprint diameter', mmS(2 * (d.radius + sc.hw + sc.thk)) + ' mm', Cc, 'belt + frame only; guards, drive and access extra');
+      add(tag + 'centre column diameter', mmS(2 * q.colR) + ' mm', I, 'placeholder'); add(tag + 'centre column height', mmS(q.colTop) + ' mm', I, 'placeholder');
+    });
+    (sc.hyd || []).length && add('Hydraulic / mobile stands', String(sc.hyd.length) + ' (see stand schedule)', Cc, 'cylinder, pump and capacity not selected');
+    (sc.equip || []).length && add('Drive, sensors and other equipment', String(sc.equip.length) + ' (see equipment schedule)', E, 'not selected or sized by this tool');
+    (sc.equip || []).length || add('Drive motor', 'not selected', I, 'Engineering review required');
+    return { title: 'COMPONENT & OPTION SCHEDULE - what is drawn and where each size comes from; * = indicative placeholder, not entered', head: ['Item', 'Size / value', 'Basis', 'Note'], rows: rows };
+  }
   function segSchedule(M) {
     var det = (M.inp.path && M.inp.path.details) || [], rows = det.map(function (d, k) {
+      if (d.spiral) return ['S' + (k + 1), 'spiral ' + (d.direction === 'right' ? 'R' : 'L') + ' ' + (Math.round(d.turns * 100) / 100) + ' turns, pitch ' + mmS(d.pitch), mmS(d.length), mmS(d.radius), ang(d.angle) + ' sweep, slope ' + ang(Math.abs(d.slopeDeg)), mmS(d.horizontal), mmS(Math.abs(d.rise))];
       return ['S' + (k + 1), d.type, mmS(d.length), d.type === 'curve' ? mmS(d.radius) : '-', d.type === 'curve' ? ang(d.angle) + ' ' + (d.direction === 'right' ? 'R' : 'L') : (d.type === 'incline' ? ang(Math.abs(d.angle)) : '-'), mmS(d.horizontal), d.type === 'incline' ? mmS(Math.abs(d.rise)) : '-'];
     });
     var e = M.desc.elevations;
@@ -386,7 +425,7 @@
     var d = new DXF(), L = layout2D(d, M), h = Math.max(40, L.hS), y = L.bottom - 4 * h;
     var mtitle = (M.meta.title || 'Conveyor general arrangement');
     // tables
-    var yy = dxfTable(d, 0, y, equipSchedule(M), h); yy = dxfTable(d, 0, yy - 4 * h, segSchedule(M), h); if ((M.sc.hyd || []).length) yy = dxfTable(d, 0, yy - 4 * h, hydSchedule(M), h);
+    var yy = dxfTable(d, 0, y, equipSchedule(M), h); yy = dxfTable(d, 0, yy - 4 * h, segSchedule(M), h); yy = dxfTable(d, 0, yy - 4 * h, compSchedule(M), h); if ((M.sc.hyd || []).length) yy = dxfTable(d, 0, yy - 4 * h, hydSchedule(M), h);
     // title block
     var tb = yy - 5 * h, tx = 0, tw = 90 * h, lines = ['ULTRAPLAST CHAINBELTS PVT. LTD.', mtitle + (M.meta.ref ? '   Ref: ' + M.meta.ref : ''), 'Date ' + (M.meta.date || '') + '    Units: mm    Scale: 1:1 (full size, model space)', 'INDICATIVE drawing - for engineering review, not for manufacture.', 'Contents: plan, floor layout, side elevation, end view, equipment + route schedules, 3-D model (to the right).', 'Dimension colours: black = entered, red = calculated, grey = indicative.'];
     d.line([tx, tb + 2 * h, 0], [tx + tw, tb + 2 * h, 0], 'TITLE'); d.line([tx + tw, tb + 2 * h, 0], [tx + tw, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx + tw, tb - lines.length * h * 1.7, 0], [tx, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx, tb - lines.length * h * 1.7, 0], [tx, tb + 2 * h, 0], 'TITLE');
@@ -490,7 +529,7 @@
     function table(T, y, widths) {
       var x0 = 14, rowH = 6.2, x = x0, i, j;
       s += '<text x="' + x0 + '" y="' + y + '" font-size="3.8" font-weight="bold">' + esc(T.title) + '</text>'; y += 3;
-      var tw = widths.reduce(function (a, b) { return a + b; }, 0), rows = [T.head].concat(T.rows.length ? T.rows : [['None entered']]);
+      var tw = widths.reduce(function (a, b) { return a + b; }, 0), rows = [T.head].concat(T.rows.length ? T.rows : [['-', 'None entered']]);
       rows.forEach(function (r, k) {
         s += '<rect x="' + x0 + '" y="' + y + '" width="' + tw + '" height="' + rowH + '" fill="' + (k === 0 ? '#e9ecef' : 'none') + '" stroke="#555" stroke-width="0.2"/>';
         for (j = 0, x = x0; j < r.length; j++) { s += '<text x="' + (x + 1.2) + '" y="' + (y + 4.2) + '" font-size="2.7"' + (k === 0 ? ' font-weight="bold"' : '') + '>' + esc(String(r[j]).slice(0, Math.max(6, Math.floor(widths[j] / 1.55)))) + '</text>'; x += widths[j]; if (j) s += '<line x1="' + (x - widths[j]) + '" y1="' + y + '" x2="' + (x - widths[j]) + '" y2="' + (y + rowH) + '" stroke="#555" stroke-width="0.2"/>'; }
@@ -501,6 +540,7 @@
     }
     var y = table(equipSchedule(M), 38, [12, 32, 24, 52, 16, 44, 42, 38, 36, 70]);
     y = table(segSchedule(M), y, [14, 28, 34, 34, 34, 44, 34]);
+    y = table(compSchedule(M), y, [78, 52, 28, 120]);
     if ((M.sc.hyd || []).length) y = table(hydSchedule(M), y, [14, 28, 42, 42, 24, 42, 70, 26, 36]);
     var notes = ['INDICATIVE drawing - for engineering review, not for manufacture.', 'Dimension colours: black = entered, red = calculated, grey = indicative (frame, legs, placeholder sizes marked *).', 'Dimensions in the DXF are lines and text, not associative AutoCAD DIMENSION objects; they were checked against the geometry they describe.', 'Motor, sensor ratings are shown exactly as typed. This tool does not select or size any motor, sensor, belt, chain or structure.'].concat(M.notes.filter(function (n) { return !/INDICATIVE|associative/.test(n); }));
     s += '<text x="14" y="' + y + '" font-size="3.8" font-weight="bold">NOTES</text>';
@@ -526,7 +566,7 @@
     var a0 = m.a0 * K, a1 = m.a1 * K, w2 = m.w * K / 2, tb = m.tube * K, tt = tb / 2, cH = m.castorH * K, zf = m.zf * K, R = m.wheelR * K, colA = m.colA * K, sl = m.sleeve * K, ci = sl - 12;
     var sTop = m.sleeveTop * K, tTop = m.tubeTop * K, rTop = m.rodTop * K, H = m.H * K, hh = m.handleH * K, off = m.off * K, Hr = m.horizontal * K, rise = (m.riseM || 0) * K, pz = (m.pivotZ || 0) * K, cl = sl + 75;
     var slope = Hr > 0 ? rise / Hr : 0, uz = function (a) { return (H + 50) + slope * (a - colA); };   // underside of the belt frame (calculated through the lift column point)
-    var hA = m.hA * K, hB = m.hB * K, hl = m.hl * K, rail = m.railH * K, rr = (hw + thk + 0.03) * K, pa = m.pa * K, packL = m.electric ? 170 : 130, packW = m.electric ? 110 : 90;
+    var showRail = sc.guideOn !== false, hA = m.hA * K, hB = m.hB * K, hl = m.hl * K, rail = m.railH * K, rr = (hw + thk + 0.03) * K, pa = m.pa * K, packL = m.electric ? 170 : 130, packW = m.electric ? 110 : 90;
     var rk = function (k) { return k; }, kb = ent.baseL ? 'entered' : 'ind', kw = ent.baseW ? 'entered' : 'ind', kc = ent.castorH ? 'entered' : 'ind';
     var star = function (kind) { return kind === 'entered' ? '' : ' *'; };
     var rect2 = function (v, x0, y0, x1, y1, layer) { v.poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true, layer); };
@@ -558,7 +598,7 @@
     rect2(Sd, a0, cH, a1, zf, 'HYD'); rect2(Sd, a0, cH, a1, cH + 2, 'HYD_IND');
     [a0 + 100, a1 - 100].forEach(function (a) { Sd.circle([a, R], R, 'HYD'); Sd.circle([a, R], 12, 'HYD_IND'); rect2(Sd, a - 45, cH - 12, a + 45, cH, 'HYD_IND'); Sd.line([a - 20, R], [a - 20, cH - 12], 'HYD_IND'); Sd.line([a + 20, R], [a + 20, cH - 12], 'HYD_IND'); });
     Sd.line([hA, zf], [hA, zf + hh], 'HYD'); Sd.line([hB, zf], [hB, zf + hh], 'HYD'); Sd.line([hA, zf + hh], [hB, zf + hh], 'HYD');
-    Sd.line([300, uz(300) + fd * K + rail], [Hr - 300, uz(Hr - 300) + fd * K + rail], 'FRAME_IND'); Sd.line([300, uz(300) + fd * K], [300, uz(300) + fd * K + rail], 'FRAME_IND'); Sd.line([Hr - 300, uz(Hr - 300) + fd * K], [Hr - 300, uz(Hr - 300) + fd * K + rail], 'FRAME_IND');
+    if (showRail) { Sd.line([300, uz(300) + fd * K + rail], [Hr - 300, uz(Hr - 300) + fd * K + rail], 'FRAME_IND'); Sd.line([300, uz(300) + fd * K], [300, uz(300) + fd * K + rail], 'FRAME_IND'); Sd.line([Hr - 300, uz(Hr - 300) + fd * K], [Hr - 300, uz(Hr - 300) + fd * K + rail], 'FRAME_IND'); }
     rect2(Sd, pa - packL, zf, pa + packL, zf + 200, 'HYD_IND');
     rect2(Sd, colA - sl, zf, colA + sl, sTop, 'HYD'); rect2(Sd, colA - ci, sTop - 150, colA + ci, H - 16, 'HYD_IND'); rect2(Sd, colA - 60, H - 16, colA + 60, H + 40, 'HYD');
     rect2(Sd, colA - 36, zf, colA + 36, tTop, 'HYD_IND'); Sd.line([colA - 20, tTop], [colA - 20, rTop], 'HYD_IND'); Sd.line([colA + 20, tTop], [colA + 20, rTop], 'HYD_IND');
@@ -574,8 +614,8 @@
     Sd.dim([a1, 0], [a1, cH], -240, 'Castor height ' + Math.round(cH) + ' mm' + star(kc), kc);
     Sd.dim([colA - sl, zf], [colA - sl, sTop], 200, 'Sleeve height ' + Math.round(sTop - zf) + ' mm *', 'ind');
     if (rTop - tTop > 20) Sd.dim([colA - sl, tTop], [colA - sl, rTop], 520, 'Rod out ' + Math.round(rTop - tTop) + ' mm *', 'ind');
-    Sd.text([Hr / 2, uz(Hr / 2) + fd * K + rail + 90], 'Yellow hand rail (indicative)', 0, 'HYD_IND', { rel: true, mid: true });
-    Sd.dim([Hr / 2, uz(Hr / 2) + fd * K], [Hr / 2, uz(Hr / 2) + fd * K + rail], 200, 'Hand rail height ' + Math.round(rail) + ' mm *', 'ind');
+    if (showRail) { Sd.text([Hr / 2, uz(Hr / 2) + fd * K + rail + 90], 'Yellow hand rail (indicative)', 0, 'HYD_IND', { rel: true, mid: true }); }
+    if (showRail) { Sd.dim([Hr / 2, uz(Hr / 2) + fd * K], [Hr / 2, uz(Hr / 2) + fd * K + rail], 200, 'Hand rail height ' + Math.round(rail) + ' mm *', 'ind'); }
     Sd.dim([hA, zf], [hA, zf + hh], 200, 'Handle height ' + Math.round(hh) + ' mm *', 'ind');
     if (pz > 0) Sd.dim([0, 0], [0, pz], 200, 'Pivot height ' + Math.round(pz) + ' mm', 'calc');
     if (rise > 0) Sd.dim([Hr, pz], [Hr, pz + rise], -260, 'Rise of the belt ' + Math.round(rise) + ' mm', 'calc');
@@ -589,7 +629,7 @@
       rect2(Fr, lo - tt, cH, lo + tt, zf, 'HYD'); rect2(Fr, ly - 20, 0, ly + 20, 2 * R, 'HYD'); rect2(Fr, ly - 45, cH - 12, ly + 45, cH, 'HYD_IND'); Fr.line([ly - 28, 2 * R], [ly - 28, cH - 12], 'HYD_IND'); Fr.line([ly + 28, 2 * R], [ly + 28, cH - 12], 'HYD_IND');
     });
     Fr.line([hl, zf], [hl, zf + hh], 'HYD');
-    [1, -1].forEach(function (sg) { Fr.line([sg * rr, uz(colA) + fd * K], [sg * rr, uz(colA) + fd * K + rail], 'FRAME_IND'); }); Fr.line([-rr, uz(colA) + fd * K + rail], [rr, uz(colA) + fd * K + rail], 'FRAME_IND');
+    if (showRail) { [1, -1].forEach(function (sg) { Fr.line([sg * rr, uz(colA) + fd * K], [sg * rr, uz(colA) + fd * K + rail], 'FRAME_IND'); }); Fr.line([-rr, uz(colA) + fd * K + rail], [rr, uz(colA) + fd * K + rail], 'FRAME_IND'); }
     rect2(Fr, -w2 + tb, cH, w2 - tb, zf, 'HYD_IND');
     rect2(Fr, -sl, zf, sl, sTop, 'HYD'); rect2(Fr, -ci, sTop - 150, ci, H - 16, 'HYD_IND');
     rect2(Fr, -off - 40, H - 16, off + 40, H + 40, 'HYD');
@@ -607,7 +647,7 @@
     row('Lift stand base length', a1 - a0, kb); row('Lift stand base width', 2 * w2, kw); row('Castor height (floor to frame)', cH, kc); row('Castor wheel diameter', 2 * R, 'ind'); row('Castor centre to centre (width)', 2 * (w2 - 40), 'ind');
     row('Frame tube section (square)', tb, 'ind'); row('Frame top above floor', zf, kc === 'entered' ? 'calc' : 'ind', 'castor + tube'); row('Frame behind the pivot', -a0, 'ind'); row('Pivot to lift column', colA, 'calc', '60 % of the horizontal run');
     row('Lift column sleeve (square)', 2 * sl, 'ind'); row('Sleeve top above floor', sTop, 'ind'); row('Height floor to saddle (stand height)', H, 'calc', 'from the route'); row('Rod out above the barrel', rTop - tTop, 'ind');
-    row('Lift stroke (as entered)', m.stroke || 0, m.stroke ? 'entered' : 'ind', m.stroke ? '' : 'not entered'); row('Handle loop height above frame', hh, 'ind'); row('Yellow hand rail height above belt', rail, 'ind'); row('Horizontal run of the belt', Hr, 'calc'); row('Rise of the belt', rise, 'calc');
+    row('Lift stroke (as entered)', m.stroke || 0, m.stroke ? 'entered' : 'ind', m.stroke ? '' : 'not entered'); row('Handle loop height above frame', hh, 'ind'); if (showRail) row('Yellow hand rail height above belt', rail, 'ind'); row('Horizontal run of the belt', Hr, 'calc'); row('Rise of the belt', rise, 'calc');
     row('Belt width', 2 * hw * K, wKind); row('Belt frame width (outside)', 2 * (hw + thk) * K, wKind);
     var notes = ['INDICATIVE drawing - for engineering review, not for manufacture.', 'Black dimensions = entered, red = calculated, grey (marked *) = indicative placeholder. Nothing here is a product selection.',
       'This tool does not select or size the frame, castors, lift cylinder, pump, motor, column, locking or load capacity. Engineering review required.', 'Cylinder / capacity as entered: ' + (m.rating || 'not entered') + '.  Pump unit: ' + (m.electric ? 'electric power pack' : 'hand pump') + '.'];

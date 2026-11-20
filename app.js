@@ -8,6 +8,8 @@
   'use strict';
   var C = window.UCPCalc, P = window.UCPProducts, R = window.UCPReport, E = window.UCPEnquiry, S = window.UCPSchematic, SIM = window.UCPSim, V3 = window.UCP3D, K = window.UCPCosting, CAD = window.UCPCad, CATL = window.UCPCatalogue, ACC = window.UCPAccess, PH = window.UCPPhysics, sim = null, view3 = null, planStarted = false;
   var CFG = window.UCP_CONFIG || {};
+  var OPT = window.UCPOptional || null;
+  if (OPT && CFG.hiddenFields) OPT.set(CFG.hiddenFields);   // optional fallback when no server is configured
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
   function esc(s) { return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -39,6 +41,7 @@
   function raw() {
     var r = {};
     Object.keys(state.values).forEach(function (k) { r[k] = state.values[k]; });
+    if (OPT && OPT.list().length) { var D0 = fresh().values; OPT.list().forEach(function (k) { if (k in D0) { r[k] = D0[k]; if (k === 'weight') r.weightUnit = D0.weightUnit; if (k === 'maxWeight') r.maxWeightUnit = D0.maxWeightUnit; if (k === 'rate') r.rateUnit = D0.rateUnit; } }); if (OPT.isHidden('obstacles')) r.obstacles = []; }
     r.unitSystem = state.unitSystem; r.advanced = state.advanced; r.suggestedFields = Object.keys(state.suggested || {});
     r.conditions = state.conditions.slice();
     r.obstacles = JSON.parse(JSON.stringify(state.obstacles));
@@ -96,6 +99,7 @@
 
   function field(name, label, o) {
     o = o || {};
+    if (!o.req && OPT && OPT.isHidden(name)) return '';   // switched off by the admin (Settings > Optional fields)
     var v = state.values[name], id = 'f_' + name, hint = o.hint ? '<small class="hint" id="h_' + name + '">' + esc(unitHint(o.hint)) + '</small>' : '';
     var kind = o.kind || C.FIELD_KINDS[name], unit = kind && kind !== 'num' && kind !== 'weight' ? ' <span class="unit">(' + ul(kind) + ')</span>' : (o.unit ? ' <span class="unit">(' + esc(o.unit) + ')</span>' : '');
     var req = (state.suggested && state.suggested[name]) ? ' <span class="badge sug" title="Typical value filled in for you - please check or edit">Suggested - check</span>' : o.req ? ' <span class="badge need">Needed</span>' : (o.type === 'select' || o.type === 'check' ? '' : (o.rec ? ' <span class="badge rec">Helpful</span>' : ' <span class="badge opt">Optional</span>'));
@@ -121,19 +125,19 @@
       '<label class="swpick">Custom <input type="color" data-name="' + name + '" value="' + (/^#[0-9a-f]{6}$/i.test(v) ? v : '#808080') + '" aria-label="' + esc(label) + ' custom colour"></label></div>' + (hint ? '<small class="hint">' + esc(hint) + '</small>' : '') + '</div>';
   }
   var HEADINGS = [['0', 'East (→ along floor length)'], ['90', 'North (↑ along floor width)'], ['180', 'West (←)'], ['270', 'South (↓)']];
-  var LAYICON = { straight: 'M4 16 H44', L: 'M4 8 H30 Q40 8 40 18 V28', U: 'M6 6 H32 Q44 6 44 16 Q44 26 32 26 H6', S: 'M4 7 H24 Q34 7 34 16 Q34 25 44 25', inclined: 'M4 26 H14 L32 8 H44', curved: 'M4 25 H18 Q40 25 40 6', multi: 'M4 10 H20 M4 22 H20 M26 10 H44 M26 22 H44 M20 10 V22', custom: 'M4 24 L14 10 L24 22 L34 8 L44 20' };
+  var LAYICON = { straight: 'M4 16 H44', L: 'M4 8 H30 Q40 8 40 18 V28', U: 'M6 6 H32 Q44 6 44 16 Q44 26 32 26 H6', S: 'M4 7 H24 Q34 7 34 16 Q34 25 44 25', inclined: 'M4 26 H14 L32 8 H44', curved: 'M4 25 H18 Q40 25 40 6', multi: 'M4 10 H20 M4 22 H20 M26 10 H44 M26 22 H44 M20 10 V22', custom: 'M4 24 L14 10 L24 22 L34 8 L44 20', spiral: 'M24 28 C6 26 6 22 24 20 C42 18 42 14 24 12 C12 10 14 6 24 4' };
   function layIcon(id) { return '<svg class="layicon" viewBox="0 0 48 32" aria-hidden="true"><path d="' + (LAYICON[id] || LAYICON.straight) + '" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"' + (id === 'custom' ? ' stroke-dasharray="1 6"' : '') + '/></svg>'; }
   var LAYOUTS = [
     ['straight', 'Straight line', 'One straight run.'], ['L', 'L-shaped', 'Two runs joined by a 90° curve.'], ['U', 'U-shaped', 'Out, turn, across, turn, back.'],
-    ['S', 'S-shaped', 'Two opposite 90° curves.'], ['inclined', 'Inclined', 'Raises or lowers product between heights.'], ['curved', 'Curved', 'Straight, one curve, straight.'],
+    ['S', 'S-shaped', 'Two opposite 90° curves.'], ['inclined', 'Inclined', 'Raises or lowers product between heights.'], ['curved', 'Curved', 'Straight, one curve, straight.'], ['spiral', 'Spiral conveyor', 'Climbs or descends around a centre column (helix).'],
     ['multi', 'Multi-conveyor line', 'Several conveyors with transfers (engineering review).'], ['custom', 'Custom layout', 'Build your own list of segments.']
   ];
   var TEMPLATES = {
     L: [['straight'], ['curve', 'left'], ['straight']], U: [['straight'], ['curve', 'left'], ['straight'], ['curve', 'left'], ['straight']],
     S: [['straight'], ['curve', 'left'], ['straight'], ['curve', 'right'], ['straight']], inclined: [['straight'], ['incline'], ['straight']],
-    curved: [['straight'], ['curve', 'left'], ['straight']], multi: [['straight']], custom: [['straight']]
+    curved: [['straight'], ['curve', 'left'], ['straight']], spiral: [['straight'], ['spiral', 'left'], ['straight']], multi: [['straight']], custom: [['straight']]
   };
-  function newSeg(type, dir) { return { type: type, length: '', angle: type === 'curve' ? '90' : '', radius: '', direction: dir || 'left', horizontal: '', rise: '', inclineAngle: '', hyd: '', hydCount: '1', hydStroke: '', hydRating: '', hydPump: 'hand', hydStyle: 'twin', hydBaseL: '', hydBaseW: '', hydCastorH: '' }; }
+  function newSeg(type, dir) { return { type: type, length: '', angle: type === 'curve' ? '90' : '', radius: '', direction: dir || 'left', horizontal: '', rise: '', inclineAngle: '', hyd: '', hydCount: '1', hydStroke: '', hydRating: '', hydPump: 'hand', hydStyle: 'twin', hydBaseL: '', hydBaseW: '', hydCastorH: '', turns: '' }; }
 
   /* ---------------------------------------------------------------- Quick fill: industry + weight -> suggested product details */
   var KG = { g: 0.001, kg: 1, oz: 0.0283495, lb: 0.45359237 };
@@ -169,6 +173,12 @@
     var p = nearestPreset(V.industry, kg); if (p) applyPreset(p, false);
   }
 
+  /** Remove boxes left empty after optional fields were switched off (the fields return in the same place when switched on). */
+  function pruneHidden() {
+    if (!OPT || !OPT.list().length) return;
+    $$('#stepBody fieldset').forEach(function (fs) { if (!fs.querySelector('input, select, textarea, button')) fs.parentNode.removeChild(fs); });
+    $$('#stepBody .grid2, #stepBody .grid3').forEach(function (g) { if (!g.children.length) g.parentNode.removeChild(g); });
+  }
   function stepHtml(n) {
     var h = [];
     if (n === 1) {
@@ -190,10 +200,10 @@
       h.push(field('startHeading', 'Start direction', { type: 'select', options: HEADINGS, kind: 'deg' }));
       h.push(field('endX', 'End X (to check)', { ph: 'optional' })); h.push(field('endY', 'End Y (to check)', { ph: 'optional' }));
       h.push('</div></fieldset>');
-      h.push('<fieldset><legend>Obstacles <small>(columns, machines, doors, pits)</small></legend><div id="obsBox">' + obstaclesHtml() + '</div><button type="button" class="btn ghost" id="addObs">+ Add obstacle</button></fieldset>');
+      if (!OPT.isHidden('obstacles')) h.push('<fieldset><legend>Obstacles <small>(columns, machines, doors, pits)</small></legend><div id="obsBox">' + obstaclesHtml() + '</div><button type="button" class="btn ghost" id="addObs">+ Add obstacle</button></fieldset>');
       h.push('<fieldset><legend>Drawings</legend>');
       h.push(field('drawingAvailable', 'A floor plan or reference drawing is available', { type: 'check', hint: 'Ultraplast will ask you to send it with the enquiry.' }));
-      h.push(uploadHtml());
+      if (!OPT.isHidden('upload')) h.push(uploadHtml());
       h.push('</fieldset>');
     } else if (n === 2) {
       h.push(quickFillHtml());
@@ -247,6 +257,7 @@
       h.push(field('washdown', 'Washdown requirement', { type: 'select', options: [['none', 'None'], ['splash', 'Occasional splash / wipe'], ['washdown', 'Regular washdown']] }));
       h.push(field('guarding', 'Guarding', { type: 'select', options: [['none', 'None requested'], ['basic', 'Basic (nip points, drive)'], ['full', 'Full enclosure']] }));
       h.push(field('guideRails', 'Side guide rails required', { type: 'check' }));
+      h.push('<p class="note">Inclined, declined, hydraulic and spiral conveyors are drawn <b>without</b> side guide rails / hand rails unless you tick this option.</p>');
       h.push('</div></fieldset>');
       h.push('<div class="adv-toggle"><label class="chk"><input type="checkbox" id="advToggle2"' + (state.advanced ? ' checked' : '') + '> <span><b>Advanced engineering inputs</b> (for technical users)</span></label></div>');
       h.push('<fieldset class="adv-box"' + (state.advanced ? '' : ' hidden') + '><legend>Advanced engineering inputs</legend><p class="note">These allow a belt/chain loop-length estimate for a simple straight, flat, two-pulley conveyor. They never select a motor or belt strength.</p><div class="grid2">');
@@ -291,18 +302,25 @@
       h.push('<div class="grid2">' + field('routeLength', 'Total conveyor route length', { req: true, hint: 'Length of the conveyor from where products get ON to where they get OFF, in metres. Example: 12. This is not the floor area.', ph: 'e.g. 12' }) + '</div>');
     } else {
       h.push('<p class="note">Describe the route as a list of segments from the inlet to the discharge. Path length is calculated from these. Curve radius is the <b>centre-line</b> radius.</p>');
-      h.push('<div id="segBox">' + segmentsHtml() + '</div><div class="btnrow"><button type="button" class="btn ghost" data-add-seg="straight">+ Straight</button><button type="button" class="btn ghost" data-add-seg="curve">+ Curve</button><button type="button" class="btn ghost" data-add-seg="incline">+ Incline / decline</button></div>');
+      h.push('<div id="segBox">' + segmentsHtml() + '</div><div class="btnrow"><button type="button" class="btn ghost" data-add-seg="straight">+ Straight</button><button type="button" class="btn ghost" data-add-seg="curve">+ Curve</button><button type="button" class="btn ghost" data-add-seg="incline">+ Incline / decline</button><button type="button" class="btn ghost" data-add-seg="spiral">+ Spiral</button></div>');
       h.push('<p class="note" id="horizTotal"></p>');
     }
     return h.join('');
   }
 
+  function spiralNote(s) {
+    var r = C.parseNum(s.radius), t = C.parseNum(s.turns), z = C.parseNum(s.rise);
+    if (r === null || t === null || z === null || isNaN(r) || isNaN(t) || isNaN(z) || r <= 0 || t <= 0 || z === 0) return '<span class="note spnote">Spiral: enter radius, number of turns and total rise. Pitch per turn and slope are calculated (red). Belt type, column, frame and drive are engineered by Ultraplast.</span>';
+    var rm = r * (state.unitSystem === 'imperial' ? 25.4 : 1), zm = z * (state.unitSystem === 'imperial' ? 25.4 : 1), pitch = Math.abs(zm) / t, len = t * Math.sqrt(Math.pow(2 * Math.PI * rm, 2) + Math.pow(pitch, 2)) / 1000;
+    return '<span class="note spnote">Calculated: pitch per turn <b class="calc">' + esc(fmtMm(pitch)) + '</b>, centre line about <b class="calc">' + esc(fmtLen(len)) + '</b>. Engineering review required for belt, column, drive and guards.</span>';
+  }
   function segmentsHtml() {
     if (!state.segments.length) return '<p class="empty">No segments yet. Use the buttons below to add straight, curve or incline segments.</p>';
     return state.segments.map(function (s, i) {
       var inputs = '', ph = function (k, t, kind) { return '<label class="mini"><span>' + t + (kind ? ' (' + ul(kind) + ')' : '') + '</span><input data-seg="' + k + '" data-i="' + i + '" inputmode="decimal" value="' + esc(s[k]) + '"></label>'; };
       if (s.type === 'straight') inputs = ph('length', 'Length', 'm');
       else if (s.type === 'curve') inputs = ph('angle', 'Angle', 'deg') + ph('radius', 'Centre-line radius', 'mm') + '<label class="mini"><span>Turn</span><select data-seg="direction" data-i="' + i + '"><option value="left"' + (s.direction === 'left' ? ' selected' : '') + '>Left</option><option value="right"' + (s.direction === 'right' ? ' selected' : '') + '>Right</option></select></label>';
+      else if (s.type === 'spiral') inputs = ph('radius', 'Centre-line radius', 'mm') + ph('turns', 'Turns (e.g. 2.5)') + ph('rise', 'Total rise (− = descending)', 'mm') + '<label class="mini"><span>Turn</span><select data-seg="direction" data-i="' + i + '"><option value="left"' + (s.direction === 'left' ? ' selected' : '') + '>Left (anti-clockwise)</option><option value="right"' + (s.direction === 'right' ? ' selected' : '') + '>Right (clockwise)</option></select></label>' + spiralNote(s);
       else inputs = ph('horizontal', 'Horizontal run', 'm') + ph('rise', 'Rise (− = decline)', 'mm') + ph('inclineAngle', 'or angle', 'deg');
       var hydBlock = '';
       if (s.type === 'incline') {
@@ -312,9 +330,9 @@
             '<label class="mini"><span>Adjustable stroke (' + ul('mm') + ') - optional</span><input type="text" inputmode="decimal" data-hyd="hydStroke" data-i="' + i + '" value="' + esc(s.hydStroke) + '" placeholder="leave blank if unknown"></label>' +
             '<label class="mini"><span>Pump unit</span><select data-hyd="hydPump" data-i="' + i + '"><option value="hand"' + (s.hydPump !== 'electric' ? ' selected' : '') + '>Hand pump</option><option value="electric"' + (s.hydPump === 'electric' ? ' selected' : '') + '>Electric power pack</option></select></label>' +
             '<label class="mini"><span>Cylinder / capacity (as you know it) - optional</span><input type="text" data-hyd="hydRating" data-i="' + i + '" value="' + esc(s.hydRating) + '" maxlength="60" placeholder="e.g. 2 t, as per your standard"></label>' +
-            '<span class="note hydnote">' + (s.hydStyle === 'mobile' ? 'Drawn like a truck-loading conveyor: a wheeled base frame on four castors under the belt (the belt hinges on it at the low end), a vertical lift column with lift cylinder and power pack that raises the high end, a handle loop and yellow hand rails; a separate stand drawing is available on the results page. Sizes you leave blank are indicative placeholders.' : 'Drawn as a twin-cylinder stand with a hand pump.') + ' Ultraplast engineering selects and sizes the cylinders; nothing is sized here.</span>' : '') + '</div>';
+            '<span class="note hydnote">' + (s.hydStyle === 'mobile' ? 'Drawn like a truck-loading conveyor: a wheeled base frame on four castors under the belt (the belt hinges on it at the low end), a vertical lift column with lift cylinder and power pack that raises the high end, a handle loop and (only if "Side guide rails required" is ticked in step 3) yellow hand rails; a separate stand drawing is available on the results page. Sizes you leave blank are indicative placeholders.' : 'Drawn as a twin-cylinder stand with a hand pump.') + ' Ultraplast engineering selects and sizes the cylinders; nothing is sized here.</span>' : '') + '</div>';
       }
-      return '<div class="seg" role="group" aria-label="Segment ' + (i + 1) + '"><b class="segn">' + (i + 1) + '</b><label class="mini"><span>Type</span><select data-seg="type" data-i="' + i + '"><option value="straight"' + (s.type === 'straight' ? ' selected' : '') + '>Straight</option><option value="curve"' + (s.type === 'curve' ? ' selected' : '') + '>Curve</option><option value="incline"' + (s.type === 'incline' ? ' selected' : '') + '>Incline / decline</option></select></label>' + inputs +
+      return '<div class="seg" role="group" aria-label="Segment ' + (i + 1) + '"><b class="segn">' + (i + 1) + '</b><label class="mini"><span>Type</span><select data-seg="type" data-i="' + i + '"><option value="straight"' + (s.type === 'straight' ? ' selected' : '') + '>Straight</option><option value="curve"' + (s.type === 'curve' ? ' selected' : '') + '>Curve</option><option value="incline"' + (s.type === 'incline' ? ' selected' : '') + '>Incline / decline</option><option value="spiral"' + (s.type === 'spiral' ? ' selected' : '') + '>Spiral (helix)</option></select></label>' + inputs +
         '<span class="segerr err" id="e_segment' + i + '" role="alert"></span><button type="button" class="btn ghost sm" data-del-seg="' + i + '" aria-label="Remove segment ' + (i + 1) + '">✕</button>' + hydBlock + '</div>';
     }).join('');
   }
@@ -347,7 +365,7 @@
       wiz.hidden = false; resWrap.hidden = true;
       $('#stepTitle').textContent = STEPS[state.step - 1].title;
       $('#stepIntro').textContent = ['Floor size is optional - if you do not know it, leave it blank and just enter the conveyor length in step 4.', 'What will the conveyor carry? Rough size and weight are fine - all of this page is optional.', 'How many products per minute, and how are they put on and taken off? If you do not know, press Skip.', 'Last step! Tell us how long the conveyor is. Not sure about the type or width? Leave them as they are and we will suggest one.'][state.step - 1];
-      $('#stepBody').innerHTML = stepHtml(state.step);
+      $('#stepBody').innerHTML = stepHtml(state.step); pruneHidden();
       $('#btnBack').hidden = state.step === 1; var skip = $('#btnSkip'); if (skip) skip.hidden = state.step === 4;
       var sc = $('#stepCount'); if (sc) sc.textContent = 'Step ' + state.step + ' of 4';
       var nl = $('#stepNeed'); if (nl) nl.innerHTML = ['<b>Needed on this page:</b> nothing. Fill what you know.', '<b>Needed on this page:</b> nothing. A rough size and weight help us a lot.', '<b>Needed on this page:</b> nothing. How many per minute helps us suggest a speed.', '<b>Needed on this page:</b> the conveyor length (marked <span class="badge need">Needed</span>). Everything else is optional.'][state.step - 1];
@@ -601,7 +619,7 @@
     return {
       floorL: inp.floorLength, floorW: inp.floorWidth, workingH: inp.workingHeight > 0 ? inp.workingHeight / 1000 : null, obstacles: inp.obstacles, path: res.path,
       inletMm: inp.inletHeight, dischargeMm: inp.dischargeHeight, beltWidthM: plan.widthM, widthNote: plan.widthNote, pulleyDiaMm: inp.pulleyDia, pitchMm: inp.pitch,
-      legSpacingMm: P.engineering.legSpacingMm, detail: detail, beltRgb: beltRgbOf(inp, res),
+      legSpacingMm: P.engineering.legSpacingMm, guideRails: !!inp.guideRails, detail: detail, beltRgb: beltRgbOf(inp, res),
       prod: { alongMm: along, acrossMm: t.acrossMm, heightMm: inp.prodHeight, pitchMm: t.productPitchMm, lanes: t.lanes },
       equip: inp.equipment, fmt: fmtLen, fmtMm: fmtMm
     };
@@ -805,6 +823,7 @@
         var k = map.indexOf(i), d = k >= 0 ? det[k] : null, nm = 'S' + (i + 1) + ' ';
         if (sg.type === 'straight') h.push('<div class="fixrow"><b class="fixt">' + nm + 'Straight</b>' + fixField('s|' + i + '|length', 'Length', ul('m'), sg.length || (d ? dispNum('m', d.length) : ''), !sg.length && !!d) + '</div>');
         else if (sg.type === 'curve') h.push('<div class="fixrow"><b class="fixt">' + nm + 'Curve ' + (sg.direction === 'right' ? 'right' : 'left') + '</b>' + fixField('s|' + i + '|angle', 'Turn angle', '°', sg.angle || '', false) + fixField('s|' + i + '|radius', 'Centre-line radius', ul('mm'), sg.radius || '', false) + '</div>');
+        else if (sg.type === 'spiral') h.push('<div class="fixrow"><b class="fixt">' + nm + 'Spiral ' + (sg.direction === 'right' ? 'right' : 'left') + '</b>' + fixField('s|' + i + '|radius', 'Centre-line radius', ul('mm'), sg.radius || '', false) + fixField('s|' + i + '|turns', 'Turns', '', sg.turns || '', false) + fixField('s|' + i + '|rise', 'Total rise (- = descending)', ul('mm'), sg.rise || '', false) + '</div>');
         else {
           var rise = sg.rise !== '' ? sg.rise : (d ? dispNum('mm', d.rise * 1000) : ''), ang = sg.inclineAngle !== '' ? sg.inclineAngle : (d ? dispNum('deg', d.angle) : ''), hor = sg.horizontal !== '' ? sg.horizontal : (d ? dispNum('m', d.horizontal) : '');
           h.push('<div class="fixrow"><b class="fixt">' + nm + (d && d.rise < 0 ? 'Decline' : 'Incline') + '</b>' + fixField('s|' + i + '|horizontal', 'Horizontal run', ul('m'), hor, sg.horizontal === '' && !!d) + fixField('s|' + i + '|rise', 'Height change (rise, - = decline)', ul('mm'), rise, sg.rise === '' && !!d) + fixField('s|' + i + '|inclineAngle', 'Angle', '°', ang, sg.inclineAngle === '' && !!d) + '</div>');
@@ -871,8 +890,8 @@
     var plan = simPlan(inp, res), d = V3.describe(v3dScene(inp, res, plan, true));
     if (!d.segments.length) return '';
     var rows = d.segments.map(function (s) {
-      var kind = s.type === 'straight' ? 'Straight' : s.type === 'curve' ? 'Curve ' + (s.direction === 'right' ? 'right' : 'left') : (s.riseM < 0 ? 'Decline' : 'Incline');
-      var det = s.type === 'curve' ? 'Radius ' + fmtMm(s.radiusM * 1000) + ', sweep ' + num2(s.angleDeg, 1) + '°' : s.type === 'incline' ? 'Run ' + fmtLen(s.horizontalM) + ', rise ' + fmtMm(s.riseM * 1000) + ', slope ' + num2(Math.abs(s.slopeDeg), 1) + '°' : 'Horizontal run ' + fmtLen(s.horizontalM);
+      var kind = s.type === 'straight' ? 'Straight' : s.spiral ? 'Spiral ' + (s.direction === 'right' ? 'right' : 'left') + (s.riseM < 0 ? ' (descending)' : ' (rising)') : s.type === 'curve' ? 'Curve ' + (s.direction === 'right' ? 'right' : 'left') : (s.riseM < 0 ? 'Decline' : 'Incline');
+      var det = s.spiral ? 'Radius ' + fmtMm(s.radiusM * 1000) + ', ' + num2(s.angleDeg / 360, 2) + ' turns, rise ' + fmtMm(Math.abs(s.riseM) * 1000) + ', pitch ' + fmtMm(s.pitchM * 1000) + ', slope ' + num2(Math.abs(s.slopeDeg), 1) + '°' : s.type === 'curve' ? 'Radius ' + fmtMm(s.radiusM * 1000) + ', sweep ' + num2(s.angleDeg, 1) + '°' : s.type === 'incline' ? 'Run ' + fmtLen(s.horizontalM) + ', rise ' + fmtMm(s.riseM * 1000) + ', slope ' + num2(Math.abs(s.slopeDeg), 1) + '°' : 'Horizontal run ' + fmtLen(s.horizontalM);
       return '<tr><td data-l="No.">S' + s.no + '</td><td data-l="Type">' + kind + '</td><td data-l="Length along belt">' + esc(fmtLen(s.lengthM)) + '</td><td data-l="Details">' + esc(det) + '</td><td data-l="Height at start">' + esc(fmtMm(s.startZ * 1000)) + '</td><td data-l="Height at end">' + esc(fmtMm(s.endZ * 1000)) + '</td></tr>';
     }).join('');
     var e = d.elevations, bits = [];
@@ -1078,7 +1097,7 @@
         s.conditions = Array.isArray(f.conditions) ? f.conditions.map(String) : [];
         s.obstacles = (f.obstacles || []).map(function (o) { return { name: String(o.name || ''), x: String(o.x || ''), y: String(o.y || ''), w: String(o.w || ''), d: String(o.d || '') }; });
         s.equipment = (f.equipment || []).map(function (q) { var o = { type: C.EQUIP_TYPES[q.type] ? q.type : 'other', name: String(q.name || ''), side: q.side === 'right' ? 'right' : 'left', rating: String(q.rating || ''), note: String(q.note || '') }; Object.keys(C.EQUIP_KINDS).forEach(function (k) { o[k] = q[k] === undefined || q[k] === null ? '' : String(q[k]); }); return o; });
-        s.segments = (f.segments || []).map(function (g) { var n = newSeg(['straight', 'curve', 'incline'].indexOf(g.type) >= 0 ? g.type : 'straight'); Object.keys(n).forEach(function (k) { if (g[k] !== undefined) n[k] = String(g[k]); }); return n; });
+        s.segments = (f.segments || []).map(function (g) { var n = newSeg(['straight', 'curve', 'incline', 'spiral'].indexOf(g.type) >= 0 ? g.type : 'straight'); Object.keys(n).forEach(function (k) { if (g[k] !== undefined) n[k] = String(g[k]); }); return n; });
         s.suggested = {}; s.advanced = !!f.advanced; s.step = 1; s.maxStep = 4; s.dirty = true;
         state = s; syncHeader(); render();
       } catch (e) { alert('Could not load project: ' + e.message); }
@@ -1116,7 +1135,7 @@
 
   /* ---------------------------------------------------------- layout changes */
   function applyLayout(id) {
-    var has = state.segments.some(function (s) { return s.length || s.radius || s.horizontal || s.rise || s.inclineAngle; });
+    var has = state.segments.some(function (s) { return s.length || s.radius || s.turns || s.horizontal || s.rise || s.inclineAngle; });
     if (has && id !== 'straight' && !window.confirm('Changing the layout replaces your segment list. Continue?')) { $$('input[name="layout"]').forEach(function (r) { r.checked = r.value === state.values.layout; }); return; }
     state.values.layout = id;
     state.segments = (TEMPLATES[id] || []).map(function (t) { return newSeg(t[0], t[1]); });
@@ -1275,6 +1294,7 @@
     var so = co.social || {}, l = Object.keys(so).map(function (k) { return '<a href="' + esc(so[k]) + '" target="_blank" rel="noopener">' + ({facebook:'Facebook',instagram:'Instagram',linkedin:'LinkedIn',youtube:'YouTube'}[k] || k) + '</a>'; }).join(' &middot; ');
     el.innerHTML = s + (l ? '<br>' + l : '');
   })();
-  window.UCPApp = { state: function () { return state; }, raw: raw };
+  window.UCPApp = { state: function () { return state; }, raw: raw, refresh: function () { try { render(); if (state.step < 5) live(); } catch (e) { /* ignore */ } } };
+  if (OPT) OPT.onChange(function () { window.UCPApp.refresh(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

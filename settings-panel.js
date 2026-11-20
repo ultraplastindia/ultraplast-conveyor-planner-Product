@@ -8,7 +8,7 @@
   function esc(s) { return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function $(s) { return box ? box.querySelector(s) : null; }
   function fmt(d) { if (!d) return '-'; var x = new Date(d); return isNaN(x) ? esc(d) : x.toLocaleString(); }
-  var TABS = [['users', 'Users & approvals'], ['mail', 'Mail'], ['rules', 'Registration rules'], ['db', 'Database'], ['me', 'My account'], ['audit', 'Audit log']];
+  var TABS = [['users', 'Users & approvals'], ['mail', 'Mail'], ['rules', 'Registration rules'], ['opt', 'Optional fields'], ['db', 'Database'], ['me', 'My account'], ['audit', 'Audit log']];
 
   function open(c) {
     if (!c || !c.user || c.user.role !== 'admin') return; ctx = c; close();
@@ -19,7 +19,7 @@
     go(tab);
   }
   function close() { if (box) { box.remove(); box = null; } }
-  function go(t) { tab = t; if (!box) return; [].forEach.call(box.querySelectorAll('[data-stab]'), function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-stab') === t)); }); ({ users: users, mail: mail, rules: rules, db: db, me: me, audit: audit })[t](); }
+  function go(t) { tab = t; if (!box) return; [].forEach.call(box.querySelectorAll('[data-stab]'), function (b) { b.setAttribute('aria-selected', String(b.getAttribute('data-stab') === t)); }); ({ users: users, mail: mail, rules: rules, opt: opt, db: db, me: me, audit: audit })[t](); }
   function body(h) { var b = $('#setBody'); if (b) b.innerHTML = h; }
   function say(m, good) { var el = $('#setMsg'); if (el) { el.textContent = m || ''; el.className = good ? 'ok' : 'err'; } }
   function call(m, p, b) { return ctx.api(m, p, b); }
@@ -89,6 +89,22 @@
   }
   function saveRules() { call('POST', '/admin/rules', { otpMinutes: $('#rOtp').value, requireApproval: $('#rReq').checked, notifyAdmin: $('#rNot').checked, allowedDomains: $('#rAllow').value, blockedDomains: $('#rBlock').value }).then(function (r) { say(r.ok ? 'Rules saved.' : (r.body.error || 'Could not save.'), r.ok); }); }
 
+  /* ---- Optional fields: switch optional planner inputs on / off for everyone */
+  function opt() {
+    var O = window.UCPOptional; if (!O) { body('<p class="err">Not available.</p>'); return; }
+    body('<p id="setMsg" role="status"></p><p class="note">Tick a field to <b>show</b> it. Untick to hide it from the planner form. A hidden field is not used in calculations. Switch it on again and it returns in the same place. Required inputs (conveyor length, layout) cannot be hidden.</p><div id="oBox">Loading...</div>');
+    call('GET', '/admin/ui').then(function (r) {
+      var el = $('#oBox'); if (!el) return; if (!r.ok) { el.innerHTML = '<p class="err">' + esc(r.body.error || 'Could not load.') + '</p>'; return; }
+      var hid = r.body.ui.hiddenFields || [];
+      el.innerHTML = O.GROUPS.map(function (g) { return '<fieldset class="optgrp"><legend>' + esc(g[0]) + '</legend>' + g[1].map(function (f) { return '<label class="chk"><input type="checkbox" data-ofield="' + f[0] + '"' + (hid.indexOf(f[0]) < 0 ? ' checked' : '') + '> <span>' + esc(f[1]) + '</span></label>'; }).join('') + '</fieldset>'; }).join('') +
+        '<p><button class="btn" type="button" data-sopt>Save</button> <button class="btn ghost" type="button" data-soptall>Show all</button></p>';
+    });
+  }
+  function saveOpt() {
+    var hid = [].map.call(box.querySelectorAll('[data-ofield]'), function (i) { return i.checked ? null : i.getAttribute('data-ofield'); }).filter(Boolean);
+    say('Saving...', true);
+    call('POST', '/admin/ui', { hiddenFields: hid }).then(function (r) { if (r.ok) { window.UCPOptional.set(r.body.ui.hiddenFields); say('Saved. ' + r.body.ui.hiddenFields.length + ' field(s) hidden.', true); } else say(r.body.error || 'Could not save.', false); });
+  }
   /* ---- Database */
   function db() {
     body('<p id="setMsg" role="status"></p><div id="dBox">Checking...</div>');
@@ -122,6 +138,8 @@
     if (t.getAttribute('data-uact')) return userAct(t.getAttribute('data-uact'), t.getAttribute('data-uid'), t.getAttribute('data-uname'));
     if (t.getAttribute('data-smail')) return mailAct(t.getAttribute('data-smail'));
     if (t.hasAttribute('data-srules')) return saveRules();
+    if (t.hasAttribute('data-sopt')) return saveOpt();
+    if (t.hasAttribute('data-soptall')) { [].forEach.call(box.querySelectorAll('[data-ofield]'), function (i) { i.checked = true; }); return; }
     if (t.hasAttribute('data-sdb')) { say('Running...', true); return call('POST', '/admin/db-setup', {}).then(function (r) { say(r.ok ? r.body.message : (r.body.error || 'Failed.'), r.ok); }); }
     if (t.hasAttribute('data-spw')) return changePw();
   }

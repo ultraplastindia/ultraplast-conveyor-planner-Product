@@ -52,6 +52,11 @@
         var Reff = Math.max(0.05, d.radius - laneOff), vs = Math.sqrt(mu * G * Reff), vt = Math.sqrt(G * Reff * p.across / (2 * h)), vc = Math.min(vs, vt), mode = vs <= vt ? 'slide' : 'tip', ratio = v / vc, st = status(ratio, margin);
         capSpeed(vc, name + ' curve');
         events.push({ type: 'curve', index: i, sStart: sS, sEnd: sE, radius: Reff, direction: d.direction, mode: mode, vcrit: vc, status: st, aLat: v * v / Reff });
+        if (d.spiral) {   // a spiral also climbs / descends: add the slope check (same friction rule as an incline)
+          var thS = Math.abs(d.slopeDeg), r3 = Math.tan(thS * Math.PI / 180) / mu, st3 = status(r3, margin), maxS = Math.atan(mu) * 180 / Math.PI;
+          events.push({ type: 'incline', index: i, sStart: sS, sEnd: sE, mode: 'slip', status: st3, slopeDeg: thS, maxDeg: maxS, rising: d.rise >= 0, ratio: r3 });
+          checks.push({ id: 'spiralslope' + i, label: name + ' spiral slope ' + (Math.round(thS * 10) / 10) + ' deg', status: st3, ratio: r3, text: 'A smooth belt holds this product up to about ' + (Math.round(maxS * 10) / 10) + ' deg (before the sideways force of the turn is added). ' + (st3 === 'fail' ? 'At this slope products WILL slip back; a textured or cleated surface needs engineering review.' : 'Margin is shown against the friction value used.') });
+        }
         checks.push({ id: 'curve' + i, label: name + ' curve R ' + Math.round(d.radius * 1000) + ' mm', status: st, mode: mode, vcrit: vc, ratio: ratio,
           text: 'Products ' + (mode === 'slide' ? 'start to slide outwards' : 'start to tip over outwards') + ' above about ' + mpm(vc) + ' m/min (sliding limit ' + mpm(vs) + ', tipping limit ' + mpm(vt) + '). Your speed is ' + mpm(v) + ' m/min' + (st === 'fail' ? ' - products WILL leave the belt here.' : st === 'near' ? ' - close to the limit.' : ' - within the limit.') });
       } else if (d.type === 'incline') {

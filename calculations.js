@@ -156,6 +156,9 @@
       for (var kk in SEGMENT_KINDS) r[kk] = toMetric(SEGMENT_KINDS[kk], parseNum(s[kk]), sys);
       r.radiusM = r.radius === null || isNaN(r.radius) ? r.radius : r.radius / 1000;      // F3 uses metres
       r.riseM = r.rise === null || isNaN(r.rise) ? r.rise : r.rise / 1000;
+      // Spiral: number of turns (or the total sweep angle). turns x 360 = sweep angle used by the geometry.
+      r.turns = parseNum(s.turns);
+      if (r.type === 'spiral') { if (r.turns !== null && !isNaN(r.turns) && r.turns > 0) r.angle = r.turns * 360; else if (r.angle !== null && !isNaN(r.angle) && r.angle > 0) r.turns = r.angle / 360; }
       // Hydraulic stand (incline / decline segments only). Customer wording is kept as typed; the tool never sizes a cylinder.
       r.hyd = r.type === 'incline' && (s.hyd === true || s.hyd === '1' || s.hyd === 1 || s.hyd === 'true');
       var hc = parseInt(s.hydCount, 10); r.hydCount = r.hyd ? (hc >= 1 && hc <= 3 ? hc : 1) : 0;
@@ -165,7 +168,7 @@
       if (r.hydStyle === 'mobile') r.hydCount = 1;   // one lift column per mobile stand
       return r;
     }).filter(function (s) {
-      return !(s.length === null && s.angle === null && s.radius === null && s.horizontal === null && s.rise === null && s.inclineAngle === null && !s.hyd);
+      return !(s.length === null && s.angle === null && s.radius === null && s.horizontal === null && s.rise === null && s.inclineAngle === null && s.turns === null && !s.hyd);
     });
     inp.conditions = Array.isArray(raw.conditions) ? raw.conditions.slice() : [];
     inp.advanced = !!raw.advanced;
@@ -247,6 +250,12 @@
         if (s.angle !== null && !isNaN(s.angle) && (s.angle <= 0 || s.angle > 360)) err('segment' + i, tag + 'curve angle must be between 0 and 360 degrees.', 4);
         if (s.radius !== null && !isNaN(s.radius) && s.radius <= 0) err('segment' + i, tag + 'radius must be greater than zero.', 4);
       }
+      if (s.type === 'spiral') {
+        if (s.turns !== null && isNaN(s.turns)) err('segment' + i, tag + 'turns must be a number.', 4);
+        else if (s.turns !== null && (s.turns <= 0 || s.turns > 20)) err('segment' + i, tag + 'number of turns must be greater than 0 and not more than 20.', 4);
+        if (s.radius !== null && !isNaN(s.radius) && s.radius <= 0) err('segment' + i, tag + 'spiral radius must be greater than zero.', 4);
+        if (s.rise !== null && !isNaN(s.rise) && s.rise === 0) err('segment' + i, tag + 'a spiral needs a rise (use a curve for a flat turn).', 4);
+      }
       if (s.type === 'incline') {
         if (s.horizontal !== null && !isNaN(s.horizontal) && s.horizontal <= 0) err('segment' + i, tag + 'horizontal run must be greater than zero.', 4);
         if (s.inclineAngle !== null && !isNaN(s.inclineAngle) && Math.abs(s.inclineAngle) >= 90) err('segment' + i, tag + 'incline angle must be between -90 and +90 degrees (exclusive).', 4);
@@ -274,6 +283,7 @@
     var ok = function (v) { return v !== null && v !== undefined && !isNaN(v); };
     if (s.type === 'straight') return ok(s.length) && s.length > 0;
     if (s.type === 'curve') return ok(s.angle) && s.angle > 0 && ok(s.radiusM) && s.radiusM > 0;
+    if (s.type === 'spiral') return ok(s.angle) && s.angle > 0 && ok(s.radiusM) && s.radiusM > 0 && ok(s.riseM) && s.riseM !== 0;
     if (s.type === 'incline') {
       var hasH = ok(s.horizontal) && s.horizontal > 0, hasZ = ok(s.riseM), hasA = ok(s.inclineAngle);
       return (hasH && (hasZ || hasA)) || (hasZ && hasA && s.inclineAngle !== 0);
@@ -317,6 +327,24 @@
         L.curved += arc; L.total += arc;
         L.horizontal += arc;
         d.length = arc; d.horizontal = arc; d.radius = R; d.angle = s.angle; d.direction = s.direction;
+      } else if (s.type === 'spiral') {                          // spiral (helix): a curve that also climbs / descends
+        var sgS = s.direction === 'right' ? -1 : 1, RS = s.radiusM, thS = deg2rad(s.angle), riseS = s.riseM;
+        var cxS = x + RS * sgS * (-Math.sin(hr)), cyS = y + RS * sgS * Math.cos(hr);
+        var stepsS = Math.max(12, Math.ceil(s.angle / 4));
+        for (var qS = 1; qS <= stepsS; qS++) {
+          var phS = thS * qS / stepsS, hhS = hr + sgS * phS;
+          pts.push({ x: cxS + RS * sgS * Math.sin(hhS), y: cyS - RS * sgS * Math.cos(hhS), z: z + riseS * qS / stepsS });
+        }
+        var hEndS = hr + sgS * thS;
+        x = cxS + RS * sgS * Math.sin(hEndS); y = cyS - RS * sgS * Math.cos(hEndS); z += riseS;
+        h = norm360(h + sgS * s.angle);
+        var arcS = RS * thS, lenS = Math.sqrt(arcS * arcS + riseS * riseS);
+        L.curved += lenS; L.total += lenS; L.horizontal += arcS;
+        // reported as a curve (so every curve check / drawing still applies) with the spiral data added
+        d.type = 'curve'; d.spiral = true; d.length = lenS; d.horizontal = arcS; d.radius = RS; d.angle = s.angle; d.direction = s.direction === 'right' ? 'right' : 'left';
+        d.rise = riseS; d.turns = s.angle / 360; d.pitch = riseS / (s.angle / 360); d.slopeDeg = Math.atan2(Math.abs(riseS), arcS) * 180 / Math.PI * (riseS < 0 ? -1 : 1);
+        d.centre = { x: cxS, y: cyS };
+        minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
       } else {                                                   // incline F4
         var H, rise;
         var hasH = s.horizontal !== null && !isNaN(s.horizontal) && s.horizontal > 0;
@@ -367,6 +395,8 @@
 
     if (layout === 'multi') {
       primary = 'custom'; reasons.push('A multi-conveyor production line needs coordinated transfers, speeds and controls, so it is treated as a custom / integrated line.');
+    } else if (geo.hasSpiral) {
+      primary = 'custom'; reasons.push('A spiral conveyor (a helical track that climbs or descends around a centre line) is a custom-engineered conveyor. The planner calculates the geometry only; belt or chain type, frame, centre column, drive and guards are for Ultraplast engineering to specify.'); alts = ['side_flex', 'inclined'];
     } else if (hasCurve && hasIncline) {
       primary = 'custom'; reasons.push('Your route combines curves and an incline, which usually needs a custom-engineered conveyor.'); alts = ['side_flex', 'inclined'];
     } else if (hasCurve) {
@@ -437,8 +467,9 @@
 
     /* --- path --- */
     var segs = segmentsFromInputs(inp);
-    var geo = { hasCurve: false, hasIncline: false };
-    segs.forEach(function (s) { if (s.type === 'curve') geo.hasCurve = true; if (s.type === 'incline') geo.hasIncline = true; });
+    var geo = { hasCurve: false, hasIncline: false, hasSpiral: false };
+    segs.forEach(function (s) { if (s.type === 'curve') geo.hasCurve = true; if (s.type === 'incline') geo.hasIncline = true; if (s.type === 'spiral') { geo.hasSpiral = geo.hasCurve = geo.hasIncline = true; } });
+    if (inp.layout === 'spiral') { geo.hasSpiral = geo.hasCurve = geo.hasIncline = true; }
     if (['L', 'U', 'S', 'curved'].indexOf(inp.layout) >= 0) geo.hasCurve = true;
     if (inp.layout === 'inclined') geo.hasIncline = true;
     var heightDiff = (num(inp.inletHeight) && num(inp.dischargeHeight)) ? (inp.dischargeHeight - inp.inletHeight) / 1000 : null;
@@ -490,11 +521,26 @@
         if (Math.abs(h.riseM) < 0.01) issue('info', 'Segment ' + h.seg + ': a hydraulic stand is selected but this incline has almost no height change, so the stand has little to adjust.');
         if (h.strokeMm === null) out.missing.push('Hydraulic stand stroke / lift range for segment ' + h.seg + ' (placeholder range is shown in the 3D view)');
       });
+      out.spiral = path.details.filter(function (d) { return d.spiral; }).map(function (d) {
+        var w = num(inp.beltWidth) ? inp.beltWidth : null, Rmm = d.radius * 1000;
+        return { seg: d.index + 1, radiusMm: Rmm, turns: d.turns, sweepDeg: d.angle, riseMm: d.rise * 1000, pitchMm: Math.abs(d.pitch) * 1000, slopeDeg: d.slopeDeg, centreLineM: d.length, planArcM: d.horizontal, direction: d.direction, descending: d.rise < 0,
+          widthMm: w, innerRadiusMm: w !== null ? Rmm - w / 2 : null, outerRadiusMm: w !== null ? Rmm + w / 2 : null, footprintDiaMm: w !== null ? 2 * Rmm + w : null };
+      });
+      out.spiral.forEach(function (sp) {
+        var nm = 'Segment ' + sp.seg + ' (spiral): ';
+        if (sp.innerRadiusMm !== null && sp.innerRadiusMm <= 0) issue('error', nm + 'the centre-line radius ' + round(sp.radiusMm, 0) + ' mm is not larger than half the conveyor width (' + round(sp.widthMm / 2, 0) + ' mm), so the belt would cross the centre of the spiral. Increase the radius or reduce the width.');
+        var ph = num(inp.prodHeight) ? inp.prodHeight : null;
+        if (ph !== null && sp.pitchMm <= ph) issue('error', nm + 'the rise per turn (' + round(sp.pitchMm, 0) + ' mm) is not greater than the product height (' + round(ph, 0) + ' mm), so the product cannot pass under the turn above. Increase the rise or reduce the number of turns.');
+        else if (ph !== null) issue('info', nm + 'rise per turn ' + round(sp.pitchMm, 0) + ' mm minus product height ' + round(ph, 0) + ' mm leaves ' + round(sp.pitchMm - ph, 0) + ' mm; the belt and frame thickness must still be deducted by Ultraplast engineering.');
+        else out.missing.push('Product height (to check the clear height between spiral turns, segment ' + sp.seg + ')');
+        issue('info', nm + 'centre-line radius ' + round(sp.radiusMm, 0) + ' mm, ' + round(sp.turns, 2) + ' turn(s), ' + (sp.descending ? 'descending ' : 'rising ') + round(Math.abs(sp.riseMm), 0) + ' mm, slope about ' + round(Math.abs(sp.slopeDeg), 1) + ' deg on the centre line. The maximum slope for your belt surface and product, the belt or chain type and the frame need engineering review.');
+        if (sp.widthMm === null) out.missing.push('Conveyor width (spiral inner / outer radius and footprint need it, segment ' + sp.seg + ')');
+      });
       path.details.forEach(function (d) { if (d.inconsistent) issue('warning', 'Segment ' + (d.index + 1) + ': entered rise and angle disagree by more than 1 degree; the rise was used.'); });
       if (inp.layout === 'multi') issue('info', 'Multi-conveyor layout: only the single chained route you entered is calculated. Parallel lines, merges and transfers need engineering review.');
       if (inp.layout === 'custom') issue('info', 'Custom layout: path length is calculated from the segments you entered; anything else needs engineering review.');
     } else {
-      out.path = null; out.hydraulic = [];
+      out.path = null; out.hydraulic = []; out.spiral = [];
       out.missing.push(inp.layout === 'straight' || !inp.layout ? 'Total route length (straight conveyor)' : 'Route segments (lengths, curve angles/radii, incline data)');
     }
 
@@ -727,6 +773,7 @@
     if (out.path) {
       var cur = out.path.details.filter(function (d) { return d.type === 'curve'; });
       if (cur.length) add('Curve sections', cur.length, 'curve(s)', cur.map(function (c) { return round(c.angle, 0) + ' deg @ R ' + round(c.radius * 1000, 0) + ' mm'; }).join('; '), STATUS.CALC);
+      (out.spiral || []).forEach(function (sp) { add('Spiral section (segment ' + sp.seg + ')', round(sp.turns, 2), 'turn(s)', 'Centre-line radius ' + round(sp.radiusMm, 0) + ' mm, ' + (sp.descending ? 'descends ' : 'rises ') + round(Math.abs(sp.riseMm), 0) + ' mm (' + round(sp.pitchMm, 0) + ' mm per turn), track length ' + round(sp.centreLineM, 2) + ' m. Belt / chain type, centre column, frame, drive and guards: to be engineered.', STATUS.CALC); });
       var inc = out.path.details.filter(function (d) { return d.type === 'incline'; });
       if (inc.length) add('Incline / decline sections', inc.length, 'section(s)', inc.map(function (c) { return round(c.angle, 1) + ' deg over ' + round(c.horizontal, 2) + ' m run'; }).join('; ') + '. Cleats / surface profile to be confirmed.', STATUS.CALC);
     }

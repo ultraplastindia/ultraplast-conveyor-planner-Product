@@ -69,3 +69,19 @@ Update: while Movable is on, the whole conveyor is one free-standing unit. There
 
 ## Login, approval and admin Settings
 Optional. When `auth.endpoint` in `config.js` is set, new users register (name, company, email, contact, purpose, password), verify an email OTP, and wait for Ultraplast super-admin approval before they can log in. Admins see a **Settings** button: users & approvals, mail (paste any mail id + app password), registration rules, database status, my account, audit log. Step-by-step setup with Neon and Vercel: `docs/BACKEND_SETUP.md`. While `endpoint` is empty the planner opens without login.
+
+
+## Spiral conveyor (new)
+- In step 1 choose the **Spiral conveyor** layout, or add a **+ Spiral** segment to any route.
+- Enter the **centre-line radius**, the **number of turns** and the **total rise** (negative = descending), and the turn direction. Pitch per turn, slope, centre-line length and footprint are calculated (shown in red).
+- The 2D plan (circles for inner / centre / outer radius), 3D view (indicative centre column and radial arms), drawings (plan, elevation, segment table, DXF/SVG), physics checks and report all include the spiral.
+- A spiral is **not in the Ultraplast standard catalogue**: the tool gives geometry and checks only. Belt type for the helix, column and arm structure, drive and guarding are "Engineering review required". Example file: `examples/spiral-conveyor.json`.
+
+## Side guide rails and hand rails
+Inclined, declined, hydraulic-stand and spiral conveyors are drawn **without** side guide rails or yellow hand rails. Tick **Side guide rails required** (step 3, "Washdown, guarding and safety") to add them to the 3D view and drawings. Straight and curved flat conveyors are unchanged.
+
+## Optional fields (admin)
+Admin settings > **Optional fields**: untick a field to hide it from the form for all users, tick it again and it returns in the same place. Hidden fields are not used in the calculation. Required inputs cannot be hidden. The list is stored on the server (needs the updated backend `lib/app.js`).
+
+## Drawing: component & option schedule
+Sheet 2 (and the all-in-one DXF) now has a **Component & option schedule**: belt and frame width, frame depth, rollers, support legs (count, spacing, height range), side guide rails (ON with size, or "NOT ADDED"), every spiral dimension (radius, turns, rise, pitch, slope, inner / outer radius, footprint diameter, centre column), plus pointers to the equipment and hydraulic schedules. Each size is tagged entered, calculated, or indicative (*). The tool still does not select or size the drive, frame, column, cylinder or capacity.

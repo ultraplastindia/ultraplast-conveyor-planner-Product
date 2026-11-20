@@ -81,7 +81,7 @@
     var em = $('#aEmail', gate).value.trim(), pw = $('#aPass', gate).value; if (!EMAIL_RE.test(em) || !pw) { setMsg('Enter your email and password.'); return; }
     busy(true); api('POST', '/auth/login', { email: em, password: pw }).then(function (r) {
       busy(false);
-      if (r.ok && r.body.token) { token = r.body.token; store('set', token); user = r.body.user; hideGate(); installBar(); return; }
+      if (r.ok && r.body.token) { token = r.body.token; store('set', token); user = r.body.user; if (window.UCPOptional) window.UCPOptional.set((r.body.ui || {}).hiddenFields); hideGate(); installBar(); return; }
       if (r.body.status === 'unverified') { pendingEmail = em.toLowerCase(); step = 'otp'; showGate('Your email is not verified yet. Press Resend code to get a new code.'); return; }
       setMsg(r.body.error || 'Login failed.');
     });
@@ -120,7 +120,7 @@
     var enabled = !!(cfg.endpoint) && cfg.enabled !== false; if (!enabled || typeof document === 'undefined') return Promise.resolve({ enabled: false });
     token = store('get'); showGate('');
     if (!token) return Promise.resolve({ enabled: true, user: null });
-    return api('GET', '/auth/me').then(function (r) { if (r.ok && r.body.user) { user = r.body.user; hideGate(); installBar(); return { enabled: true, user: user }; } token = ''; store('clear'); return { enabled: true, user: null }; });
+    return api('GET', '/auth/me').then(function (r) { if (r.ok && r.body.user) { user = r.body.user; if (window.UCPOptional) window.UCPOptional.set((r.body.ui || {}).hiddenFields); hideGate(); installBar(); return { enabled: true, user: user }; } token = ''; store('clear'); return { enabled: true, user: null }; });
   }
   return { init: init, api: api, validateRegister: validateRegister, logout: logout, user: function () { return user; }, isLocked: function () { return locked; } };
 });
