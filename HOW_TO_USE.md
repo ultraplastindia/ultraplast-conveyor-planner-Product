@@ -85,3 +85,11 @@ Admin settings > **Optional fields**: untick a field to hide it from the form fo
 
 ## Drawing: component & option schedule
 Sheet 2 (and the all-in-one DXF) now has a **Component & option schedule**: belt and frame width, frame depth, rollers, support legs (count, spacing, height range), side guide rails (ON with size, or "NOT ADDED"), every spiral dimension (radius, turns, rise, pitch, slope, inner / outer radius, footprint diameter, centre column), plus pointers to the equipment and hydraulic schedules. Each size is tagged entered, calculated, or indicative (*). The tool still does not select or size the drive, frame, column, cylinder or capacity.
+
+## Plant layout drawing (factory-floor style)
+The **Engineering drawing (CAD)** card now has a **Plant layout drawing**, in the style of a factory room layout: room outline with its name and ceiling / working height, drain trenches and other obstacles, upstream and downstream machines by name, the conveyor as a double line with flow arrows, every straight run dimensioned in mm and feet (for example "S1 2440 mm (8 ft)"), curves with radius and angle, the drive position, and a plant layout schedule. Downloads: **DXF** and **SVG (A3)**; it is also placed below the title block in the all-in-one DXF.
+- Step 1 has a new optional box **Room / area name** (for example "Filling room"). Floor length and width draw the room; working height prints as ceiling height.
+- Add trenches with **+ Add obstacle** and put "Drain trench" (or trench / drain / channel / pit) in the name: it is drawn hatched with its width ("200mm WIDE"). Other obstacles are drawn as labelled boxes.
+- Type the upstream and downstream machine names in Step 3; each is drawn as a named box at the matching end (box size is a grey placeholder).
+- Without a floor size a dashed box around the route is drawn and the drawing says so. A motor you did not enter is shown as a grey "DRIVE (not selected)" symbol.
+- Black = entered, red = calculated, grey * = indicative. Indicative, for engineering review, not for manufacture. Example: `examples/plant-layout-filling-room.json`.

@@ -25,6 +25,7 @@
 
   /* ----- layers: name, ACI colour, linetype, SVG colour, SVG width (paper mm) ----- */
   var LAYERS = {
+    TRENCH: [3, 'CONTINUOUS', '#2e7d32', 0.2], FLOW: [7, 'CONTINUOUS', '#111', 0.3], FLOOR_IND: [8, 'DASHED', '#888', 0.25],
     OUTLINE: [7, 'CONTINUOUS', '#111', 0.5], FRAME_IND: [8, 'CONTINUOUS', '#777', 0.25], GUIDE_IND: [8, 'CONTINUOUS', '#999', 0.18],
     SUPPORT_IND: [8, 'CONTINUOUS', '#777', 0.25], DRIVE_IND: [6, 'CONTINUOUS', '#a0285a', 0.25], CENTRE: [1, 'CENTER', '#c0392b', 0.18],
     FLOOR: [8, 'CONTINUOUS', '#888', 0.35], OBSTACLE: [3, 'DASHED', '#2e7d32', 0.25], PRODUCT: [30, 'CONTINUOUS', '#b9770e', 0.25],
@@ -431,6 +432,8 @@
     d.line([tx, tb + 2 * h, 0], [tx + tw, tb + 2 * h, 0], 'TITLE'); d.line([tx + tw, tb + 2 * h, 0], [tx + tw, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx + tw, tb - lines.length * h * 1.7, 0], [tx, tb - lines.length * h * 1.7, 0], 'TITLE'); d.line([tx, tb - lines.length * h * 1.7, 0], [tx, tb + 2 * h, 0], 'TITLE');
     lines.forEach(function (t, i) { d.text([tx + h, tb - i * h * 1.7 + h * 0.2], t, i === 0 ? h * 1.2 : h * 0.95, i === 3 ? 'DIM_CALC' : 'TITLE'); });
     var bottom = tb - lines.length * h * 1.7 - 2 * h;
+    var PS = null; try { PS = buildPlant(M); } catch (e) { PS = null; }   // plant layout drawing, placed below the title block
+    if (PS) { var pv = PS.views[0], ph = textSize(pv), psz = viewSize(pv), py = bottom - 8 * ph - psz[1]; d.text([0, py + psz[1] + 4 * ph], 'PLANT LAYOUT (room, trenches, machines, conveyor flow) - ' + mtitle, ph * 1.4, 'TITLE'); emitPrims(d, prims(pv, ph), -pv.min[0], py - pv.min[1]); bottom = py - 6 * ph; }
     // 3-D model placed to the right of the 2-D layout
     var sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D', hyd: 'HYD3D' };
     var lo = [1e18, 1e18, 1e18], hi = [-1e18, -1e18, -1e18], src = [1e18, 1e18, 1e18];
@@ -692,5 +695,160 @@
     return s + '</svg>';
   }
 
-  return { buildStand: buildStand, standList: standList, standSchedule: standSchedule, toDXFStand: toDXFStand, toSVGStand: toSVGStand, build: build, toDXF2D: toDXF2D, toDXF3D: toDXF3D, toDXFAll: toDXFAll, toSVGSheet2: toSVGSheet2, toSVGAll: toSVGAll, equipSchedule: equipSchedule, hydSchedule: hydSchedule, segSchedule: segSchedule, toSVG: toSVG, nearestAci: nearestAci, LAYERS: LAYERS, ascii: ascii };
+
+  /* ===================================================== PLANT LAYOUT DRAWING (factory-floor style)
+   * Room outline and name, ceiling / working height, drain trenches and other obstacles from your entries, upstream and
+   * downstream machines by name, the conveyor route as a double line with flow arrows, each straight run dimensioned in
+   * mm and feet, drive position, and a schedule. Everything is drawn from entered or calculated data; sizes that
+   * were not entered are grey placeholders. INDICATIVE - for engineering review, not for manufacture. */
+  var FT = 304.8;
+  function ftTxt(m) { var f = m * MM / FT; return (Math.round(f * 10) / 10) + ' ft'; }
+  function hatch(V, x0, y0, x1, y1, gap, layer) {
+    for (var c = x0 + y0 + gap; c < x1 + y1; c += gap) { var lo = Math.max(x0, c - y1), hi = Math.min(x1, c - y0); if (hi - lo > 1) V.line([lo, c - lo], [hi, c - hi], layer); }
+  }
+  function buildPlant(M) {
+    if (!M || !M.ok) return null;
+    var sc = M.sc, inp = M.inp, sts = sc.stations, hw = sc.hw, thk = sc.thk, details = (inp.path && inp.path.details) || [], tr = sc.track;
+    var V = new View('plant', 'PLANT LAYOUT'), rows = [], notes = [], k;
+    function add(item, val, basis, note) { rows.push([item, val, basis, note || '']); }
+    var wEntered = inp.widthNote ? inp.widthNote === 'entered width' : pos(inp.beltWidthM);
+    var L1 = offsetPts(sts, hw), R1 = offsetPts(sts, -hw), fS = sts[0], fE = sts[sts.length - 1];
+    var bx0 = 1e18, by0 = 1e18, bx1 = -1e18, by1 = -1e18; L1.concat(R1).forEach(function (p) { bx0 = Math.min(bx0, p[0]); by0 = Math.min(by0, p[1]); bx1 = Math.max(bx1, p[0]); by1 = Math.max(by1, p[1]); });
+    var fl = sc.floor, fx = fl ? fl.x1 * MM : 0, fy = fl ? fl.y1 * MM : 0;
+    var rx0, ry0, rx1, ry1;
+    if (fl) { rx0 = 0; ry0 = 0; rx1 = fx; ry1 = fy; }
+    else { rx0 = bx0 - 1800; ry0 = by0 - 1800; rx1 = bx1 + 1800; ry1 = by1 + 1800; }
+    var span = Math.max(rx1 - rx0, ry1 - ry0), tH = Math.max(80, Math.round(span / 90 / 10) * 10);
+    /* room */
+    var ro = Math.max(60, span * 0.006);
+    V.poly([[rx0, ry0], [rx1, ry0], [rx1, ry1], [rx0, ry1]], true, fl ? 'FLOOR' : 'FLOOR_IND');
+    if (fl) V.poly([[rx0 - ro, ry0 - ro], [rx1 + ro, ry0 - ro], [rx1 + ro, ry1 + ro], [rx0 - ro, ry1 + ro]], true, 'FLOOR');
+    var dOff = Math.max(450, span * 0.05);
+    if (fl) { V.dim([rx0, ry0], [rx1, ry0], -dOff, 'Room length ' + mmTxt(fl.x1) + ' (' + ftTxt(fl.x1) + ')', 'entered'); V.dim([rx1, ry0], [rx1, ry1], -dOff, 'Room width ' + mmTxt(fl.y1) + ' (' + ftTxt(fl.y1) + ')', 'entered'); add('Room length x width', mmTxt(fl.x1) + ' x ' + mmTxt(fl.y1), 'entered', ftTxt(fl.x1) + ' x ' + ftTxt(fl.y1)); }
+    else { notes.push('Room size not entered: a dashed box around the route is drawn instead. It is not a measured room.'); add('Room length x width', 'not entered', 'indicative *', 'dashed box only'); }
+    /* room name and ceiling / working height box (below the room) */
+    var rn = String(inp.roomName || '').trim(), hasH = pos(inp.workingH), wh = hasH ? inp.workingH : null;
+    var bw = Math.max(span * 0.3, 2600), bh = tH * 3.6, bxc = (rx0 + rx1) / 2 - bw / 2, byc = ry0 - ro - dOff * 2.1 - bh;
+    V.poly([[bxc, byc], [bxc + bw, byc], [bxc + bw, byc + bh], [bxc, byc + bh]], true, 'TITLE');
+    V.text([bxc + bw / 2, byc + bh * 0.58], (rn || String(inp.projectName || 'ROOM / AREA')).toUpperCase(), tH * 1.15, 'TITLE', { mid: true });
+    V.text([bxc + bw / 2, byc + bh * 0.16], hasH && wh ? 'CEILING / WORKING HT - ' + (Math.round(wh * 100) / 100) + ' M  (' + Math.round(wh * MM) + ' mm)' : 'CEILING / WORKING HEIGHT NOT ENTERED', tH * 0.8, hasH && wh ? 'DIM_ENTERED' : 'DIM_IND', { mid: true });
+    add('Room / area name', rn || '(project name used)', rn ? 'entered' : 'indicative *', '');
+    add('Ceiling / working height', hasH && wh ? Math.round(wh * MM) + ' mm (' + (Math.round(wh * MM / FT * 10) / 10) + ' ft)' : 'not entered', hasH && wh ? 'entered' : 'indicative *', 'free height to the lowest ceiling, pipe or beam');
+    /* trenches and other obstacles */
+    var nT = 0;
+    sc.obstacles.forEach(function (b, i) {
+      var x0 = b.x * MM, y0 = b.y * MM, x1 = (b.x + b.w) * MM, y1 = (b.y + b.d) * MM, trench = /trench|drain|channel|sump|pit/i.test(b.name), nm = String(b.name).toUpperCase();
+      V.poly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]], true, trench ? 'TRENCH' : 'OBSTACLE');
+      if (trench) {
+        nT++; var narrow = Math.min(b.w, b.d) * MM; hatch(V, x0, y0, x1, y1, Math.max(40, narrow / 3), 'TRENCH');
+        var horiz = b.w >= b.d, tx = (x0 + x1) / 2, ty = (y0 + y1) / 2;
+        V.text([tx, ty], nm + '  ' + Math.round(narrow) + 'mm WIDE', Math.max(40, Math.min(tH, narrow * 0.55)), 'TRENCH', { mid: true, rot: horiz ? 0 : 90 });
+        add('Trench: ' + b.name, Math.round(narrow) + ' mm wide x ' + Math.round(Math.max(b.w, b.d) * MM) + ' mm long', 'entered', 'depth / level not entered');
+      } else {
+        V.text([(x0 + x1) / 2, (y0 + y1) / 2], nm + ' ' + mmTxt(b.w) + ' x ' + mmTxt(b.d), Math.max(40, Math.min(tH, Math.min(b.w, b.d) * MM * 0.18)), 'OBSTACLE', { mid: true });
+        add('Obstacle: ' + b.name, mmTxt(b.w) + ' x ' + mmTxt(b.d), 'entered', 'height not entered');
+      }
+    });
+    /* conveyor: double line + centre line */
+    V.poly(L1, false, 'OUTLINE'); V.poly(R1, false, 'OUTLINE'); V.line(L1[0], R1[0], 'OUTLINE'); V.line(L1[L1.length - 1], R1[R1.length - 1], 'OUTLINE');
+    V.poly(sts.map(function (st) { return [st.p[0] * MM, st.p[1] * MM]; }), false, 'CENTRE');
+    add('Conveyor width', mmTxt(2 * hw), wEntered ? 'entered' : 'indicative *', wEntered ? '' : 'width not entered - illustrative');
+    /* segments */
+    var sS = 0, flowN = 0;
+    function arrow(s, size) {
+      var p = tr.at(s), q = tr.at(Math.min(s + 0.05, tr.length || s + 0.05)), tx = q.x - p.x, ty = q.y - p.y, l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+      var cx = p.x * MM, cy = p.y * MM, nx = -ty, ny = tx;
+      V.poly([[cx - tx * size * 1.2 + nx * size * 0.55, cy - ty * size * 1.2 + ny * size * 0.55], [cx + tx * size * 1.2, cy + ty * size * 1.2], [cx - tx * size * 1.2 - nx * size * 0.55, cy - ty * size * 1.2 - ny * size * 0.55]], true, 'FLOW');
+      V.line([cx - tx * size * 2.4, cy - ty * size * 2.4], [cx + tx * size * 1.2, cy + ty * size * 1.2], 'FLOW');
+    }
+    var aS = Math.max(70, tH * 1.1);
+    function freeSide(sa, sb, off) {   // put a run's dimension on the side with more free room (away from the other runs)
+      var pa = tr.at(sa), pb = tr.at(sb), dx = pb.x - pa.x, dy = pb.y - pa.y, l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l, m = tr.at((sa + sb) / 2), best = 1, bd = -1;
+      [1, -1].forEach(function (sg) { var cx = m.x * MM + nx * sg * off, cy = m.y * MM + ny * sg * off, md = 1e18; sts.forEach(function (st, i) { var s = tr.cum[i]; if (s >= sa - 1e-6 && s <= sb + 1e-6) return; md = Math.min(md, Math.hypot(st.p[0] * MM - cx, st.p[1] * MM - cy)); }); if (md > bd) { bd = md; best = sg; } });
+      return best * off;
+    }
+    details.forEach(function (d, k) {
+      var sE = sS + d.length, qa = tr.at(sS), qb = tr.at(sE), A = [qa.x * MM, qa.y * MM], B = [qb.x * MM, qb.y * MM], label = 'S' + (k + 1) + ' ', mid = (sS + sE) / 2, off = freeSide(sS, sE, hw * MM + 420);
+      if (d.spiral && d.centre) {
+        var cs = [d.centre.x * MM, d.centre.y * MM];
+        V.circle(cs, d.radius * MM, 'CENTRE'); V.circle(cs, Math.max(0, d.radius - hw - thk) * MM, 'OUTLINE'); V.circle(cs, (d.radius + hw + thk) * MM, 'OUTLINE');
+        V.text([cs[0], cs[1] - (d.radius + hw + thk) * MM - tH * 1.6], label + 'Spiral ' + (d.direction === 'right' ? 'R' : 'L') + ' R' + Math.round(d.radius * MM) + ' x ' + (Math.round(d.turns * 100) / 100) + ' turns, rise ' + mmTxt(Math.abs(d.rise)), tH * 0.8, 'DIM_CALC', { mid: true });
+        add(label + 'Spiral', 'R ' + mmTxt(d.radius) + ', ' + (Math.round(d.turns * 100) / 100) + ' turns, rise ' + mmTxt(Math.abs(d.rise)), 'entered', 'centre line ' + mmTxt(d.length) + ' (' + ftTxt(d.length) + ')');
+      } else if (d.type === 'curve') {
+        var sg = d.direction === 'right' ? -1 : 1, cen = [(qa.x + sg * d.radius * -qa.ty) * MM, (qa.y + sg * d.radius * qa.tx) * MM], pm = tr.at(mid);
+        V.line(cen, [pm.x * MM, pm.y * MM], 'DIM_CALC'); V.circle(cen, 20, 'DIM_CALC');
+        V.text([cen[0], cen[1] - tH * 1.4], label + 'R' + Math.round(d.radius * MM) + ' x ' + ang(d.angle) + ' ' + (d.direction === 'right' ? 'R' : 'L'), tH * 0.75, 'DIM_CALC', { mid: true });
+        add(label + 'Curve', 'R ' + mmTxt(d.radius) + ' x ' + ang(d.angle) + ' ' + (d.direction === 'right' ? 'right' : 'left'), 'entered', 'arc ' + mmTxt(d.length) + ' (' + ftTxt(d.length) + ')');
+      } else if (d.type === 'incline') {
+        V.dim(A, B, off, label + mmTxt(d.horizontal) + ' (' + ftTxt(d.horizontal) + ') run, rise ' + mmTxt(Math.abs(d.rise)), 'calc');
+        add(label + (d.rise < 0 ? 'Decline' : 'Incline'), mmTxt(d.horizontal) + ' run, rise ' + mmTxt(Math.abs(d.rise)) + ', ' + ang(Math.abs(d.angle)), 'entered', 'belt length ' + mmTxt(d.length) + ' (' + ftTxt(d.length) + ')');
+      } else {
+        V.dim(A, B, off, label + mmTxt(d.length) + ' (' + ftTxt(d.length) + ')', 'calc');
+        add(label + 'Straight', mmTxt(d.length), 'entered', ftTxt(d.length));
+      }
+      if (d.type !== 'curve' && !d.spiral && d.length * MM > aS * 8) { arrow(mid, aS); flowN++; } else if (d.type === 'curve' && d.length * MM > aS * 6) { arrow(mid, aS); flowN++; }
+      sS = sE;
+    });
+    if (!flowN) arrow((tr.length || sS) / 2, aS);
+    add('Total route length', mmTxt(sS) + ' (' + ftTxt(sS) + ')', 'calculated', '');
+    /* flow labels */
+    var t0 = [fS.t ? fS.t[0] : 1, fS.t ? fS.t[1] : 0];
+    V.text([fS.p[0] * MM, fS.p[1] * MM - hw * MM - tH * 2.2], 'INLET', tH * 0.8, 'FLOW', { mid: true }); V.text([fE.p[0] * MM, fE.p[1] * MM - hw * MM - tH * 2.2], 'DISCHARGE', tH * 0.8, 'FLOW', { mid: true });
+    /* upstream / downstream machines: named boxes at the two ends (size is a grey placeholder) */
+    function machine(st, back, name, tag) {
+      var p = tr.at(back ? 0 : tr.length || sS), q = tr.at(back ? 0.05 : Math.max(0, (tr.length || sS) - 0.05)), tx = back ? p.x - q.x : p.x - q.x, ty = back ? p.y - q.y : p.y - q.y, l = Math.hypot(tx, ty) || 1; tx /= l; ty /= l;
+      var len = Math.max(900, 2 * hw * MM * 1.6), wid = Math.max(900, 2 * hw * MM * 1.8), c = [p.x * MM + tx * (len / 2 + 60), p.y * MM + ty * (len / 2 + 60)], nx = -ty, ny = tx;
+      var pts = [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(function (s) { return [c[0] + tx * s[0] * len / 2 + nx * s[1] * wid / 2, c[1] + ty * s[0] * len / 2 + ny * s[1] * wid / 2]; });
+      V.poly(pts, true, 'EQUIP_IND'); V.text([c[0], c[1]], String(name).toUpperCase(), Math.max(50, Math.min(tH, len * 0.11)), 'EQUIP_IND', { mid: true });
+      V.text([c[0], c[1] - Math.max(50, tH * 0.8) * 1.4], tag + ' machine (size * indicative)', Math.max(40, tH * 0.55), 'DIM_IND', { mid: true });
+    }
+    var up = String(inp.upstream || '').trim(), dn = String(inp.downstream || '').trim();
+    if (up) { machine(fS, true, up, 'UPSTREAM'); add('Upstream machine', up, 'entered', 'box size is a placeholder'); }
+    if (dn) { machine(fE, false, dn, 'DOWNSTREAM'); add('Downstream machine', dn, 'entered', 'box size is a placeholder'); }
+    /* drive: entered motors/equipment are listed; otherwise a grey gear-motor placeholder at the discharge end */
+    var motors = (sc.equip || []).filter(function (e) { return e.type === 'motor'; });
+    if (motors.length) {
+      motors.forEach(function (e) { var t2 = norm2([e.t[0], e.t[1]]), l2 = [-t2[1], t2[0]]; V.poly(rect([e.c[0], e.c[1]], t2, l2, -e.len / 2, e.len / 2, -e.wid / 2, e.wid / 2), true, 'EQUIP'); V.text([e.c[0] * MM, e.c[1] * MM + (e.wid / 2 + 0.12) * MM], 'E' + e.n + ' ' + (e.name || e.label), Math.max(40, tH * 0.7), 'EQUIP', { mid: true }); add('Drive motor E' + e.n, (e.name || e.label) + (e.rating ? ', ' + e.rating : ''), 'entered', 'position and size as entered; not selected by this tool'); });
+    } else {
+      var ep = tr.at(tr.length || sS), ex = ep.x * MM, ey = ep.y * MM, tq = tr.at(Math.max(0, (tr.length || sS) - 0.05)), dx = ep.x - tq.x, dy = ep.y - tq.y, dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
+      var nx2 = -dy, ny2 = dx, off2 = hw * MM + 120;
+      function box(cx, cy, a, b, layer) { V.poly([[cx - dx * a + nx2 * b, cy - dy * a + ny2 * b], [cx + dx * a + nx2 * b, cy + dy * a + ny2 * b], [cx + dx * a - nx2 * b, cy + dy * a - ny2 * b], [cx - dx * a - nx2 * b, cy - dy * a - ny2 * b]], true, layer); }
+      box(ex + nx2 * (off2 + 110), ey + ny2 * (off2 + 110), 160, 110, 'DRIVE_IND'); box(ex + nx2 * (off2 + 110 + 260), ey + ny2 * (off2 + 110 + 260), 190, 120, 'DRIVE_IND');
+      V.text([ex + nx2 * (off2 + 520), ey + ny2 * (off2 + 520)], 'DRIVE (not selected)', Math.max(40, tH * 0.6), 'DRIVE_IND', { mid: true });
+      add('Drive motor and gearbox', 'not selected', 'indicative *', 'Engineering review required; grey placeholder at the discharge end');
+    }
+    add('Lanes (products side by side)', String(inp.lanes || 1), inp.lanes ? 'entered' : 'indicative *', '');
+    var comp = compSchedule(M), legLine = comp.rows.filter(function (r) { return /Side guide|Support legs/.test(r[0]); }); legLine.forEach(function (r) { rows.push([r[0], r[1], r[2], r[3]]); });
+    notes.unshift('INDICATIVE drawing - for engineering review, not for manufacture.');
+    notes.push('Machine boxes, drive symbol and trench depth / levels are placeholders: only names, sizes and positions you entered are measured. Name a trench obstacle "Drain trench" (or similar) to see it hatched.');
+    return { id: 'PLANT', views: [V], rows: rows, notes: notes, meta: M.meta, nTrench: nT, schedule: { title: 'PLANT LAYOUT SCHEDULE - * = indicative placeholder, not entered', head: ['Item', 'Size / value', 'Basis', 'Note'], rows: rows } };
+  }
+  function toSVGPlant(S) {
+    var W = 420, H = 297, M = { meta: S.meta || {} }, v = S.views[0];
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '" width="' + W + 'mm" height="' + H + 'mm" font-family="Arial,Helvetica,sans-serif"><rect width="' + W + '" height="' + H + '" fill="#fff"/>' + wmSvg(W, H, M, 'pl');
+    s += '<rect x="8" y="8" width="' + (W - 16) + '" height="' + (H - 16) + '" fill="none" stroke="#000" stroke-width="0.7"/>';
+    var box = [14, 14, 262, 216], STD2 = [10, 15, 20, 25, 30, 40, 50, 75, 100, 150, 200, 250, 300, 400, 500], sz = viewSize(v), ext = Math.max(sz[0], sz[1]) * 0.04, w = sz[0] + ext, hgt = sz[1] + ext, aw = box[2] - 6, ah = box[3] - 12, need = Math.max(w / aw, hgt / ah), n = STD2.filter(function (q) { return q >= need; })[0] || Math.ceil(need), k = 1 / n, h2 = 2.4 / k;
+    s += '<g><rect x="' + box[0] + '" y="' + box[1] + '" width="' + box[2] + '" height="' + box[3] + '" fill="none" stroke="#999" stroke-width="0.2"/><text x="' + (box[0] + 2) + '" y="' + (box[1] + 5) + '" font-size="3.6" font-weight="bold">PLANT LAYOUT (plan)  -  SCALE 1:' + n + '  -  flow arrows show the product direction</text>' + svgPrims(prims(v, h2), k, box[0] + (aw - sz[0] * k) / 2 + 3, box[1] + 9 + (ah - sz[1] * k) / 2, v.min[0], v.max[1]) + '</g>';
+    var x0 = 282, y = 18, cw = [40, 38, 16, 30]; s += '<text x="' + x0 + '" y="' + y + '" font-size="3.2" font-weight="bold">' + esc(S.schedule.title.slice(0, 70)) + '</text>'; y += 2;
+    [S.schedule.head].concat(S.rows).slice(0, 52).forEach(function (r, i) {
+      s += '<rect x="' + x0 + '" y="' + y + '" width="124" height="4.1" fill="' + (i === 0 ? '#e9ecef' : 'none') + '" stroke="#777" stroke-width="0.15"/>';
+      for (var j = 0, x = x0; j < 4; j++) { s += '<text x="' + (x + 1) + '" y="' + (y + 3) + '" font-size="2.4"' + (i === 0 ? ' font-weight="bold"' : '') + '>' + esc(String(r[j]).slice(0, Math.floor(cw[j] / 1.2))) + '</text>'; x += cw[j]; }
+      y += 4.1;
+    });
+    s += '<rect x="14" y="236" width="392" height="49" fill="none" stroke="#000" stroke-width="0.5"/><line x1="14" y1="245" x2="406" y2="245" stroke="#000" stroke-width="0.3"/>';
+    s += '<text x="17" y="243" font-size="4.6" font-weight="bold">ULTRAPLAST CHAINBELTS PVT. LTD. - PLANT LAYOUT (room, trenches, machines, conveyor flow)</text>';
+    S.notes.concat([((S.meta && S.meta.title) || 'Conveyor general arrangement') + '   Date ' + ((S.meta && S.meta.date) || '') + '   Units: mm (feet in brackets)   Black = entered, red = calculated, grey * = indicative']).forEach(function (t, i) { s += '<text x="17" y="' + (250 + i * 5.2) + '" font-size="3"' + (i === 0 ? ' fill="#a33" font-weight="bold"' : '') + '>' + esc(t.slice(0, 190)) + '</text>'; });
+    return s + '</svg>';
+  }
+  function toDXFPlant(S) {
+    var d = new DXF(), v = S.views[0], h = textSize(v), sz = viewSize(v), gap = 1800;
+    d.text([0, sz[1] + h * 5], 'ULTRAPLAST CHAINBELTS PVT. LTD. - PLANT LAYOUT (separate drawing, full size, mm)', h * 1.6, 'TITLE');
+    d.text([0, sz[1] + h * 3], (S.meta && S.meta.title) || 'Conveyor general arrangement', h, 'TEXT');
+    emitPrims(d, prims(v, h), -v.min[0], -v.min[1]);
+    var y = -gap; y = dxfTable(d, 0, y, S.schedule, h) - 3 * h;
+    S.notes.concat(['Dimensions are lines + text (not associative DIMENSION objects). Generated ' + ((S.meta && S.meta.date) || '') + '.']).forEach(function (t, i) { d.text([0, y - i * h * 1.8], t, h * 0.95, 'TEXT'); });
+    return d.finish([[-gap, y - 8 * h], [sz[0] + gap, sz[1] + h * 8]]);
+  }
+
+  return { buildPlant: buildPlant, toSVGPlant: toSVGPlant, toDXFPlant: toDXFPlant, buildStand: buildStand, standList: standList, standSchedule: standSchedule, toDXFStand: toDXFStand, toSVGStand: toSVGStand, build: build, toDXF2D: toDXF2D, toDXF3D: toDXF3D, toDXFAll: toDXFAll, toSVGSheet2: toSVGSheet2, toSVGAll: toSVGAll, equipSchedule: equipSchedule, hydSchedule: hydSchedule, segSchedule: segSchedule, toSVG: toSVG, nearestAci: nearestAci, LAYERS: LAYERS, ascii: ascii };
 });

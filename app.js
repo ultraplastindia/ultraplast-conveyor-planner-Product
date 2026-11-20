@@ -24,7 +24,7 @@
       step: 1, maxStep: 1, dirty: false,
       unitSystem: 'metric', advanced: false,
       values: {
-        projectName: '', industry: '', floorLength: '', floorWidth: '', workingHeight: '', inletHeight: '', dischargeHeight: '',
+        projectName: '', roomName: '', industry: '', floorLength: '', floorWidth: '', workingHeight: '', inletHeight: '', dischargeHeight: '',
         startX: '', startY: '', startHeading: '0', endX: '', endY: '', drawingAvailable: false, layout: 'straight',
         productName: '', handling: '', prodLength: '', prodWidth: '', prodHeight: '', weight: '', weightUnit: 'kg', maxWeight: '', maxWeightUnit: 'kg',
         fragility: 'low', temperature: '', foodContact: 'none', cleaning: 'dry', orientation: 'length_leading', gap: '', accumulation: 'none',
@@ -185,6 +185,7 @@
       h.push('<div class="welcome"><h3>Welcome - this takes about 2 minutes</h3><ol><li>Fill in <b>only what you know</b>. The only thing we really need is the <b>conveyor length</b>.</li><li>Not sure about something? <b>Leave it blank</b> or press <b>Skip</b> - we will tell you what is still missing.</li><li>At the end you get a <b>3D view, a drawing and a report</b> you can download.</li></ol><div class="btnrow"><button type="button" class="btn primary" id="quickStart">Quick start: I only know the conveyor length</button><button type="button" class="btn ghost" id="tryExample">Fill an example for me</button></div></div>');
       h.push('<fieldset><legend>Project and available space</legend><div class="grid2">');
       h.push(field('projectName', 'Project name', { type: 'text', hint: 'e.g. "Bottling line 2 - Plant A".', ph: 'My conveyor project' }));
+      h.push(field('roomName', 'Room / area name', { type: 'text', hint: 'Printed on the plant layout drawing, e.g. "Filling room".', ph: 'e.g. Filling room' }));
       h.push(field('industry', 'Industry', { type: 'select', options: [['', 'Select industry...']].concat(P.industries.map(function (i) { return [i.id, i.label]; })) }));
       h.push(field('floorLength', 'Available floor length', { hint: 'Longest side of the free floor area, in metres. Leave blank if you do not know it.', ph: 'e.g. 20', tip: 'Measure the clear floor space where the conveyor may be installed.' }));
       h.push(field('floorWidth', 'Available floor width', { hint: 'Shorter side of the free floor area, in metres.', ph: 'e.g. 6' }));
@@ -621,7 +622,8 @@
       inletMm: inp.inletHeight, dischargeMm: inp.dischargeHeight, beltWidthM: plan.widthM, widthNote: plan.widthNote, pulleyDiaMm: inp.pulleyDia, pitchMm: inp.pitch,
       legSpacingMm: P.engineering.legSpacingMm, guideRails: !!inp.guideRails, detail: detail, beltRgb: beltRgbOf(inp, res),
       prod: { alongMm: along, acrossMm: t.acrossMm, heightMm: inp.prodHeight, pitchMm: t.productPitchMm, lanes: t.lanes },
-      equip: inp.equipment, fmt: fmtLen, fmtMm: fmtMm
+      equip: inp.equipment, fmt: fmtLen, fmtMm: fmtMm,
+      roomName: inp.roomName, projectName: inp.projectName, upstream: inp.upstream, downstream: inp.downstream, lanes: t.lanes
     };
   }
   /* ---- CAD-style drawing: 2D views + 3D model, DXF / SVG downloads ---- */
@@ -633,6 +635,12 @@
     for (var i = 0; i < n; i++) { var S = CAD.buildStand(m, i); h += '<div class="cadbtns"><button type="button" class="btn primary" data-standdxf="' + i + '">Download ' + esc(S.id) + ' stand drawing (DXF for AutoCAD)</button><button type="button" class="btn ghost" data-standsvg="' + i + '">Download ' + esc(S.id) + ' stand drawing (SVG, A3)</button></div><div class="cadsheet" role="img" aria-label="Stand drawing ' + esc(S.id) + '">' + CAD.toSVGStand(S) + '</div>'; }
     return h + '</div>';
   }
+  /* plant layout drawing (factory-floor style: room, trenches, machines, conveyor flow) with its own DXF / SVG downloads */
+  function plantDrawingHtml(m) {
+    var S; try { S = CAD.buildPlant(m); } catch (e) { return '<p class="note">The plant layout drawing could not be generated (' + esc(e.message) + ').</p>'; }
+    if (!S) return '';
+    return '<div class="standdraw"><h4>Plant layout drawing - room, trenches, machines and conveyor flow</h4><p class="note">A factory-floor style plan: room outline with name and ceiling / working height, drain trenches and other obstacles you entered (name an obstacle "Drain trench" to see it hatched), upstream and downstream machines by name, the conveyor as a double line with flow arrows, every run dimensioned in mm and feet, the drive position and a schedule. <b>Black</b> = entered, <b>red</b> = calculated, <b>grey *</b> = indicative placeholder. Indicative, for engineering review, not for manufacture.</p><div class="cadbtns"><button type="button" class="btn primary" data-plantdxf="1">Download plant layout (DXF for AutoCAD)</button><button type="button" class="btn ghost" data-plantsvg="1">Download plant layout (SVG, A3)</button></div><div class="cadsheet" role="img" aria-label="Plant layout drawing">' + CAD.toSVGPlant(S) + '</div></div>';
+  }
   function cadBuild(inp, res) {
     var plan = simPlan(inp, res), raw = (state.result && state.result.raw) || {};
     return CAD.build(v3dScene(inp, res, plan, true), { title: (raw.projectName || 'Conveyor') + ' - general arrangement', date: new Date().toISOString().slice(0, 10), company: P.company.name, logoUrl: P.company.logoUrl });
@@ -642,7 +650,7 @@
     if (!m.ok) return '<section class="card"><h3>Engineering drawing (CAD)</h3><p class="note">' + esc(m.notes[m.notes.length - 1]) + '</p></section>';
     return '<section class="card" id="cadCard"><h3>Engineering drawing (CAD)</h3><p class="note">Drawing sheets made from your entries: plan view, developed side elevation, end view, floor layout and a 3D view, with length, width, radius, angle, rise and height dimensions, plus your motor and sensors with their positions and sizes, and schedules of equipment and route. <b>Download ALL drawings together</b> gives one AutoCAD file with everything. <b>Black</b> = entered, <b>red</b> = calculated, <b>grey</b> = indicative (frame, legs, motor are drawing aids, not Ultraplast engineering data).</p>' +
       '<div class="cadbtns"><button type="button" class="btn primary" id="cadAll" title="One DXF with plan, floor layout, side elevation, end view, schedules, title block and the 3D model">Download ALL drawings together (DXF for AutoCAD)</button><button type="button" class="btn ghost" id="cadSvgAll">Download all sheets (SVG)</button><button type="button" class="btn ghost" id="cadDxf2">Download 2D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadDxf3">Download 3D DXF (AutoCAD)</button><button type="button" class="btn ghost" id="cadSvg">Download drawing sheet (SVG, A3)</button></div>' +
-      standDrawingHtml(m) +
+      standDrawingHtml(m) + plantDrawingHtml(m) +
       '<div class="cadsheet" role="img" aria-label="Engineering drawing sheet 1">' + CAD.toSVG(m) + '</div>' +
       '<h4>Sheet 2 - equipment and route schedules</h4><div class="cadsheet" role="img" aria-label="Engineering drawing sheet 2: schedules">' + CAD.toSVGSheet2(m) + '</div>' +
       '<p class="note">DXF files are full size in millimetres. Dimensions are lines and text (checked against the geometry they describe), not editable AutoCAD dimension objects. Open the SVG in a browser and use Print &rarr; Save as PDF for a PDF. Engineering review required before any manufacture.</p>' +
@@ -1219,6 +1227,12 @@
     if (t.id === 'quickStart') { applyLayout('straight'); state.values.layout = 'straight'; state.dirty = true; go(4); return; }
     if (t.id === 'tryExample') { var EX = { projectName: 'Example - bottle line', industry: 'beverages', floorLength: '20', floorWidth: '6', handling: 'bottles', productName: '500 ml PET bottle', prodLength: '70', prodWidth: '70', prodHeight: '200', weight: '520', weightUnit: 'g', gap: '50', rate: '60', speed: '', hoursPerDay: '16', layout: 'straight', routeLength: '12' }; Object.keys(EX).forEach(function (k) { state.values[k] = EX[k]; }); state.dirty = true; render(false); var tn = $('#stepIntro'); if (tn) tn.textContent = 'Example values filled in. Press Next to see each page, or Skip to the end - then change anything you like.'; return; }
     if (t.id === 'btnSkip') { next(); return; }
+    var pdx = t.getAttribute && (t.getAttribute('data-plantdxf') !== null ? 'dxf' : t.getAttribute('data-plantsvg') !== null ? 'svg' : '');
+    if (pdx && cadModel) {
+      var rp = state.result, nmp = slug(rp && rp.raw && rp.raw.projectName), PS2 = CAD.buildPlant(cadModel);
+      try { if (pdx === 'dxf') download('Ultraplast-' + nmp + '-plant-layout.dxf', CAD.toDXFPlant(PS2), 'application/dxf'); else download('Ultraplast-' + nmp + '-plant-layout.svg', CAD.toSVGPlant(PS2), 'image/svg+xml'); msg('Plant layout drawing downloaded.'); } catch (er3) { msg('Could not create the plant layout drawing: ' + er3.message); }
+      return;
+    }
     var sdx = t.getAttribute && (t.getAttribute('data-standdxf') !== null ? 'dxf' : t.getAttribute('data-standsvg') !== null ? 'svg' : '');
     if (sdx && cadModel) {
       var r1 = state.result, nm1 = slug(r1 && r1.raw && r1.raw.projectName), si = +t.getAttribute(sdx === 'dxf' ? 'data-standdxf' : 'data-standsvg'), SS = CAD.buildStand(cadModel, si);

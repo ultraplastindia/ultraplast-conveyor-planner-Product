@@ -36,7 +36,7 @@
   "accumulation": "short",
   "rate": "120",
   "rateUnit": "per_min",
-  "speed": "12",
+  "speed": "14",
   "hoursPerDay": "16",
   "shifts": "2",
   "operation": "continuous",
