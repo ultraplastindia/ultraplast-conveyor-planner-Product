@@ -80,6 +80,7 @@
     o = o || {}; var A = tk.A, B = tk.B, hb = tk.W / 2, x = tk.x, y = tk.y, tx = o.tH || 100;
     function R(a0, a1, b0, b1, layer) { V.poly(rect([x, y], A, B, a0, a1, b0, b1), true, layer || 'TRUCK'); }
     function pt2(a, b) { return [(x + A[0] * a + B[0] * b) * MM, (y + A[1] * a + B[1] * b) * MM]; }
+    if (tk.open) R(tk.a0 - tk.wall, tk.a0, -hb, hb);   // lowered tail gate
     R(tk.a0, tk.a1, -hb, hb); R(tk.a0 + 0.08, tk.a1 - 0.08, -hb + 0.08, hb - 0.08, 'TRUCK_IND');   // body and inside of the walls
     R(tk.cabA0, tk.cabA0 + 1.4, -tk.cabW / 2, tk.cabW / 2); R(tk.cabA0 + 1.4, tk.cabEnd, -tk.cabW / 2 + 0.05, tk.cabW / 2 - 0.05);
     tk.axles.forEach(function (ax) { [1, -1].forEach(function (sg) { var bc = sg * (hb - 0.12); R(ax - tk.wheelR, ax + tk.wheelR, bc - tk.tyreW / 2, bc + tk.tyreW / 2, 'TRUCK_IND'); }); });
@@ -234,6 +235,7 @@
     if (sc.truck) (function () {   // loading truck beside the discharge end (side elevation, x = horizontal distance along the route direction)
       var tk = sc.truck, inl = tk.mode === 'inline', z0 = tk.deck * MM, z1 = (tk.deck + tk.wall) * MM, hb = tk.W / 2, Rw = tk.wheelR * MM, xe = totalH, X = function (a) { return xe + a * MM; }, xs0 = inl ? X(tk.a0) : X(-hb), xs1 = inl ? X(tk.a1) : X(hb);
       function Rc(xa, xb, za, zb, layer) { E.poly([[xa, za], [xb, za], [xb, zb], [xa, zb]], true, layer || 'TRUCK'); }
+      if (tk.open) Rc(X(tk.a0 - tk.wall), xs0, z0 - 80, z0);   // lowered tail gate
       Rc(xs0, xs1, z0 - 120, z0); Rc(xs0, xs1, z0, z1); Rc(xs0 + 80, xs1 - 80, z0, z1, 'TRUCK_IND');
       if (inl) {
         Rc(X(tk.a1 - 0.08), X(tk.a1), z1, (tk.headTop) * MM); Rc(X(tk.a0 - 0.25), X(tk.cabEnd), z0 - 320, z0 - 120);
@@ -251,7 +253,7 @@
       E.dim([xs0, z0], [xs0, z1], 260 + 440, 'Side wall ' + Math.round(z1 - z0) + ' mm' + (nk.wall ? '' : ' *'), nk.wall ? 'entered' : 'ind');
       E.dim([xs0, -300], [xs1, -300], -900, 'Truck body ' + (inl ? 'length ' + Math.round(tk.L * MM) + (nk.L ? '' : ' *') : 'width ' + Math.round(tk.W * MM) + (nk.W ? '' : ' *')) + ' (seen in this view)', (inl ? nk.L : nk.W) ? 'entered' : 'ind');
       if (tk.dropM > 0.05) E.dim([xe, z0], [xe, tk.dischargeZ * MM], -200, 'Drop to truck bed ' + Math.round(tk.dropM * MM) + ' mm', 'calc');
-      if (isFinite(tk.wallClearM) && tk.wallClearM > 0.02) E.dim([X(-tk.nearM), z1], [X(-tk.nearM), z1 + tk.wallClearM * MM], -260, 'Belt frame to wall top ' + Math.round(tk.wallClearM * MM) + ' mm', 'calc');
+      if (isFinite(tk.wallClearM) && tk.wallClearM > 0.02) E.dim([X(-tk.nearM), tk.refZ * MM], [X(-tk.nearM), tk.refZ * MM + tk.wallClearM * MM], -260, (tk.open ? 'Belt frame to bed / open gate ' : 'Belt frame to wall top ') + Math.round(tk.wallClearM * MM) + ' mm', 'calc');
     })();
     var zmax = Math.max.apply(null, top.map(function (p) { return p[1]; })), dimY = Math.max(zmax, (desc.elevations.topOfProductM || 0) * MM) + 500;
     E.dim([0, 0], [0, fS.p[2] * MM], 320, 'Inlet height ' + mmTxt(fS.p[2]) + (desc.elevations.basis === 'illustrative' ? ' (illustrative)' : ''), desc.elevations.basis === 'illustrative' ? 'ind' : 'entered');
@@ -445,8 +447,9 @@
       add(tg + 'bed height above floor', mmS(tk.deck) + ' mm', tk.ent.deck ? E : I, tk.ent.deck ? '' : 'placeholder'); add(tg + 'side wall height', mmS(tk.wall) + ' mm', tk.ent.wall ? E : I, tk.ent.wall ? '' : 'placeholder');
       if (tk.mode === 'inline') add(tg + 'belt head overhang over body', mmS(tk.ov) + ' mm', tk.ent.ov ? E : I, tk.ent.ov ? '' : 'placeholder');
       add(tg + 'discharge height', mmS(tk.dischargeZ) + ' mm', Cc, ''); add(tg + 'drop to bed', mmS(tk.dropM) + ' mm', Cc, '');
-      add(tg + 'discharge above side wall top', mmS(tk.aboveWallM) + ' mm', Cc, tk.aboveWallM <= 0.02 ? 'ENGINEERING REVIEW: product may not clear the wall' : '');
-      add(tg + 'belt frame to wall top (' + mmS(tk.nearM) + ' mm back)', mmS(tk.wallClearM) + ' mm', Cc, tk.wallClearM < 0 ? 'ENGINEERING REVIEW: belt may foul the truck' : '');
+      if (tk.open) add(tg + 'tail gate', 'open, lowered flat (' + mmS(tk.wall) + ' mm long)', E, 'option ticked in the 3D view');
+      add(tg + (tk.open ? 'discharge above bed' : 'discharge above side wall top'), mmS(tk.aboveWallM) + ' mm', Cc, tk.aboveWallM <= 0.02 ? 'ENGINEERING REVIEW: product may not clear the ' + (tk.open ? 'bed' : 'wall') : '');
+      add(tg + (tk.open ? 'belt frame to bed / open gate (' : 'belt frame to wall top (') + mmS(tk.nearM) + ' mm back)', mmS(tk.wallClearM) + ' mm', Cc, tk.wallClearM < 0 ? 'ENGINEERING REVIEW: belt may foul the truck' : '');
       add(tg + 'cab, wheels, axles, heap', 'drawn', I, 'illustrative only; no truck selected, no axle load or reach check');
     }
     (sc.hyd || []).length && add('Hydraulic / mobile stands', String(sc.hyd.length) + ' (see stand schedule)', Cc, 'cylinder, pump and capacity not selected');

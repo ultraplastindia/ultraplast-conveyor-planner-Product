@@ -600,7 +600,7 @@
   var TCOL = { body: [58, 104, 168], floor: [92, 98, 108], chassis: [48, 50, 56], cab: [236, 238, 240], glass: [120, 160, 190], tyre: [28, 28, 30], hub: [170, 174, 180], grille: [60, 62, 68], heap: [226, 164, 72] };
   function truckSizes(T) {
     var q = function (mm, d) { return pos(mm) ? mm / 1000 : d; };
-    return { mode: T.mode === 'inline' ? 'inline' : 'across', L: q(T.L, TRK.L), W: q(T.W, TRK.W), deck: q(T.deck, TRK.deck), wall: q(T.wall, TRK.wall), ov: q(T.ov, TRK.ov), cabL: TRK.cabL,
+    return { mode: T.mode === 'inline' ? 'inline' : 'across', L: q(T.L, TRK.L), W: q(T.W, TRK.W), deck: q(T.deck, TRK.deck), wall: q(T.wall, TRK.wall), ov: q(T.ov, TRK.ov), cabL: TRK.cabL, open: !!T.open && T.mode === 'inline',
       ent: { L: pos(T.L), W: pos(T.W), deck: pos(T.deck), wall: pos(T.wall), ov: pos(T.ov) } };
   }
   function cyl(c, ax, r, hl, color, tag, out, nSeg) {   // wheel: axis ax (unit, horizontal), radius r, half length hl
@@ -630,7 +630,10 @@
     box([tailA, cabEnd - 0.1], [-0.45, 0.45], [z0 - 0.32, z0 - 0.12], TCOL.chassis);
     box([a0, a1], [-hb, hb], [z0 - 0.12, z0], TCOL.floor);
     box([a0, a1], [-hb, -hb + tk], [z0, z1], TCOL.body); box([a0, a1], [hb - tk, hb], [z0, z1], TCOL.body);
-    box([a0, a0 + tk], [-hb, hb], [z0, z1], TCOL.body);
+    if (T.open) {   // tail gate opened: lowered flat to bed level, hinged at the bed edge, with two support chains
+      box([a0 - T.wall, a0], [-hb, hb], [z0 - tk, z0], TCOL.body);
+      [-1, 1].forEach(function (sg) { box([a0 - T.wall, a0 - T.wall + 0.03], [sg * (hb - 0.1) - 0.015, sg * (hb - 0.1) + 0.015], [z0 - 0.02, z0 + 0.28], TCOL.chassis); box([a0 - T.wall, a0], [sg * (hb - 0.1) - 0.008, sg * (hb - 0.1) + 0.008], [z0 + 0.27, z0 + 0.29], TCOL.chassis); });
+    } else box([a0, a0 + tk], [-hb, hb], [z0, z1], TCOL.body);
     box([a1 - tk, a1], [-hb, hb], [z0, z1 + 0.3], TCOL.body);
     box([a0, a1], [-hb - 0.02, -hb], [z1 - 0.06, z1 + 0.02], TCOL.chassis); box([a0, a1], [hb, hb + 0.02], [z1 - 0.06, z1 + 0.02], TCOL.chassis);   // top rails
     // cab, bonnet, windscreen, grille
@@ -657,8 +660,9 @@
     })();
     P.forEach(function (q) { sc.polys.push(q); });
     // calculated clearances from the route (no values are invented)
-    var nearA = T.mode === 'across' ? T.W / 2 : T.ov, sBack = Math.max(0, tr.length - nearA), zUnder = tr.at(sBack).z - sc.fd, droph = zE - z0, aboveWall = zE - z1, wallClear = zUnder - z1;
-    sc.truck = { mode: T.mode, L: T.L, W: T.W, deck: T.deck, wall: T.wall, ov: T.ov, cabL: T.cabL, ent: T.ent, dischargeZ: zE, dropM: droph, aboveWallM: aboveWall, wallClearM: wallClear, nearM: nearA, x: D[0], y: D[1], th: th, lh: lh, A: A, B: B, a0: a0, a1: a1, cabA0: cabA0, cabEnd: cabEnd, axles: axles, wheelR: Rw, tyreW: TRK.tyreW, cabW: cw, cabTop: z0 + 1.75, headTop: z1 + 0.3, hs: hs, hk: hk };
+    var nearA = T.mode === 'across' ? T.W / 2 : T.ov, sBack = Math.max(0, tr.length - nearA), zUnder = tr.at(sBack).z - sc.fd, droph = zE - z0, refZ = T.open ? z0 : z1, aboveWall = zE - refZ, wallClear = zUnder - refZ;
+    if (T.open) wallClear = Math.min(wallClear, tr.at(Math.max(0, tr.length - nearA - T.wall)).z - sc.fd - z0);   // the belt frame is lower further back: check over the outer edge of the lowered gate too
+    sc.truck = { open: T.open, refZ: refZ, mode: T.mode, L: T.L, W: T.W, deck: T.deck, wall: T.wall, ov: T.ov, cabL: T.cabL, ent: T.ent, dischargeZ: zE, dropM: droph, aboveWallM: aboveWall, wallClearM: wallClear, nearM: nearA, x: D[0], y: D[1], th: th, lh: lh, A: A, B: B, a0: a0, a1: a1, cabA0: cabA0, cabEnd: cabEnd, axles: axles, wheelR: Rw, tyreW: TRK.tyreW, cabW: cw, cabTop: z0 + 1.75, headTop: z1 + 0.3, hs: hs, hk: hk };
     // dimensions and tags (3-D view)
     function tdim(a, b, text, kind, o) { sc.dims.push({ a: a, b: b, text: text, kind: kind, dashed: !!(o && o.dashed), off: (o && o.off) || [0, -9], truck: true }); }
         tdim(pt(a0, hb + 0.3, 0), pt(a1, hb + 0.3, 0), 'Truck body length ' + fmtMm(T.L * 1000) + (T.ent.L ? '' : ' *'), T.ent.L ? 'entered' : 'ind', { off: [0, 12] });
@@ -668,10 +672,10 @@
     if (droph > 0.05) tdim(pt(0, 0.0, z0), pt(0, 0, zE), 'Drop to truck bed ' + fmtMm(droph * 1000), 'calc', { off: [6, 0] });
     sc.tags.push({ p: pt(0, 0, Math.max(zE, z1) + 0.45), text: 'TRUCK (indicative) - ' + (T.mode === 'across' ? 'across the discharge end' : 'in line beyond the discharge'), kind: 'ind', short: 'TRUCK', truck: true });
     // notes and checks
-    var msg = 'Truck: a loading truck is drawn at the discharge end (' + (T.mode === 'across' ? 'across the conveyor, body centred on the discharge point' : 'in line with the conveyor, belt head overhanging the body by ' + fmtMm(T.ov * 1000) + (T.ent.ov ? '' : ' *')) + '). Body ' + fmtMm(T.L * 1000) + ' × ' + fmtMm(T.W * 1000) + ', bed ' + fmtMm(T.deck * 1000) + ', side wall ' + fmtMm(T.wall * 1000) + ' - sizes marked * are placeholders; enter the real truck sizes. The cab, wheels, axles and the material heap are illustrative. This tool does not select a truck or check axle load, reach or safety.';
+    var msg = 'Truck: a loading truck is drawn at the discharge end (' + (T.mode === 'across' ? 'across the conveyor, body centred on the discharge point' : 'in line with the conveyor, belt head overhanging the body by ' + fmtMm(T.ov * 1000) + (T.ent.ov ? '' : ' *') + (T.open ? ', tail gate open and lowered flat' : '')) + '). Body ' + fmtMm(T.L * 1000) + ' × ' + fmtMm(T.W * 1000) + ', bed ' + fmtMm(T.deck * 1000) + ', side wall ' + fmtMm(T.wall * 1000) + ' - sizes marked * are placeholders; enter the real truck sizes. The cab, wheels, axles and the material heap are illustrative. This tool does not select a truck or check axle load, reach or safety.';
     sc.notes.push(msg);
-    if (aboveWall <= 0.02) sc.notes.push('Truck: ENGINEERING REVIEW - the discharge point (' + fmtMm(zE * 1000) + ') is not above the truck side wall top (' + fmtMm(z1 * 1000) + '), so product would not drop clear into the body. Raise the discharge, lower the side wall or choose another truck.');
-    else if (wallClear < 0) sc.notes.push('Truck: ENGINEERING REVIEW - the belt frame underside, ' + fmtMm(nearA * 1000) + ' back from the discharge point, is ' + fmtMm(Math.abs(wallClear) * 1000) + ' below the truck side wall top, so the belt and frame may foul the truck.');
+    if (aboveWall <= 0.02) sc.notes.push('Truck: ENGINEERING REVIEW - the discharge point (' + fmtMm(zE * 1000) + ') is not above the ' + (T.open ? 'truck bed (' + fmtMm(z0 * 1000) + ')' : 'truck side wall top (' + fmtMm(z1 * 1000) + ')') + ', so product would not drop clear into the body. Raise the discharge, ' + (T.open ? 'lower the bed' : 'lower the side wall') + ' or choose another truck.');
+    else if (wallClear < 0) sc.notes.push('Truck: ENGINEERING REVIEW - the belt frame underside, ' + fmtMm(nearA * 1000) + ' back from the discharge point' + (T.open ? ' or over the lowered tail gate' : '') + ', is ' + fmtMm(Math.abs(wallClear) * 1000) + ' below the truck ' + (T.open ? 'bed / tail gate' : 'side wall top') + ', so the belt and frame may foul the truck.');
     var gr = function (p) { for (var i = 0; i < 3; i++) { sc.all.min[i] = Math.min(sc.all.min[i], p[i]); sc.all.max[i] = Math.max(sc.all.max[i], p[i]); sc.conv.min[i] = Math.min(sc.conv.min[i], p[i]); sc.conv.max[i] = Math.max(sc.conv.max[i], p[i]); } };
     P.forEach(function (q) { q.p.forEach(gr); });
     if (sc.floor) { var out = false; P.forEach(function (q) { q.p.forEach(function (p) { if (p[0] < sc.floor.x0 - 0.01 || p[0] > sc.floor.x1 + 0.01 || p[1] < sc.floor.y0 - 0.01 || p[1] > sc.floor.y1 + 0.01) out = true; }); }); if (out) sc.notes.push('Truck: part of the truck lies outside the floor you entered. Check the discharge position or enlarge the floor.'); }
@@ -715,7 +719,7 @@
       var f = function (k, lab, ph) { return '<label class="sim-speed">' + lab + ' <input type="number" min="0" step="10" inputmode="decimal" data-k="' + k + '" placeholder="' + ph + ' *" value="' + (pos(T0[k]) ? T0[k] : '') + '" style="width:92px"></label>'; };
       return '<label class="chk truck-on"><input type="checkbox" data-k="on"' + (T0.on ? ' checked' : '') + '> Show loading truck at the discharge end</label>' +
         '<span class="truckopts" data-o="truckopts"' + (T0.on ? '' : ' hidden') + '><label class="sim-speed">Truck position <select data-k="mode"><option value="across"' + (T0.mode === 'inline' ? '' : ' selected') + '>Across the conveyor end</option><option value="inline"' + (T0.mode === 'inline' ? ' selected' : '') + '>In line, beyond the discharge</option></select></label>' +
-        f('L', 'Body length (mm)', TRK.L * 1000) + f('W', 'Body width (mm)', TRK.W * 1000) + f('deck', 'Bed height (mm)', TRK.deck * 1000) + f('wall', 'Side wall height (mm)', TRK.wall * 1000) + f('ov', 'Belt head overhang, in line (mm)', TRK.ov * 1000) +
+        f('L', 'Body length (mm)', TRK.L * 1000) + f('W', 'Body width (mm)', TRK.W * 1000) + f('deck', 'Bed height (mm)', TRK.deck * 1000) + f('wall', 'Side wall height (mm)', TRK.wall * 1000) + f('ov', 'Belt head overhang, in line (mm)', TRK.ov * 1000) + '<label class="chk" data-o="openwrap"' + (T0.mode === 'inline' ? '' : ' hidden') + '><input type="checkbox" data-k="open"' + (T0.open ? ' checked' : '') + '> Open tail gate (rear wall lowered flat)</label>' +
         '<small class="note">Grey * = placeholder shown when left blank. Type the real truck sizes. The tool does not select a truck.</small></span>';
     }
     root.innerHTML = '<div class="v3d-bar" role="toolbar" aria-label="3D view controls">' + views.map(function (v) { return '<button type="button" class="btn sm" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join('') +
@@ -1049,6 +1053,7 @@
     function truckChange() {
       var g = function (k) { var el = root.querySelector('[data-k="' + k + '"]'); return el ? el : { value: '', checked: false }; }, p = { on: !!g('on').checked, mode: g('mode').value === 'inline' ? 'inline' : 'across' };
       ['L', 'W', 'deck', 'wall', 'ov'].forEach(function (k) { var v = parseFloat(g(k).value); if (v > 0) p[k] = v; });
+      p.open = !!g('open').checked && p.mode === 'inline'; var ow = root.querySelector('[data-o="openwrap"]'); if (ow) ow.hidden = p.mode !== 'inline';
       var bx = root.querySelector('[data-o="truckopts"]'); if (bx) bx.hidden = !p.on;
       opts.scene.truck = p; if (p.on) addTruck(sc, p); else removeTruck(sc);
       refreshNote(); fit(); if (typeof opts.onTruck === 'function') { try { opts.onTruck(p); } catch (er) { } }
