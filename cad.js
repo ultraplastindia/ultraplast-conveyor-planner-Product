@@ -25,6 +25,7 @@
 
   /* ----- layers: name, ACI colour, linetype, SVG colour, SVG width (paper mm) ----- */
   var LAYERS = {
+    TRUCK: [4, 'CONTINUOUS', '#1f5f9f', 0.3], TRUCK_IND: [8, 'DASHED', '#777', 0.25], TRUCK3D: [4, 'CONTINUOUS', '#1f5f9f', 0.1],
     TRENCH: [3, 'CONTINUOUS', '#2e7d32', 0.2], FLOW: [7, 'CONTINUOUS', '#111', 0.3], FLOOR_IND: [8, 'DASHED', '#888', 0.25],
     OUTLINE: [7, 'CONTINUOUS', '#111', 0.5], FRAME_IND: [8, 'CONTINUOUS', '#777', 0.25], GUIDE_IND: [8, 'CONTINUOUS', '#999', 0.18],
     SUPPORT_IND: [8, 'CONTINUOUS', '#777', 0.25], DRIVE_IND: [6, 'CONTINUOUS', '#a0285a', 0.25], CENTRE: [1, 'CENTER', '#c0392b', 0.18],
@@ -72,6 +73,24 @@
   function shMap(sts) { var cum = [0], i; for (i = 1; i < sts.length; i++) cum.push(cum[i - 1] + Math.hypot(sts[i].p[0] - sts[i - 1].p[0], sts[i].p[1] - sts[i - 1].p[1])); return { cum: cum, at: function (s) { var k = 0; while (k < sts.length - 2 && sts[k + 1].s < s) k++; var a = sts[k], b = sts[k + 1], t = b.s > a.s ? Math.max(0, Math.min(1, (s - a.s) / (b.s - a.s))) : 0; return cum[k] + (cum[k + 1] - cum[k]) * t; } }; }
   function offsetPts(sts, off) { return sts.map(function (st) { return [(st.p[0] + st.l[0] * off) * MM, (st.p[1] + st.l[1] * off) * MM]; }); }
   function rect(c, t, l, a0, a1, b0, b1) { function P(a, b) { return [(c[0] + t[0] * a + l[0] * b) * MM, (c[1] + t[1] * a + l[1] * b) * MM]; } return [P(a0, b0), P(a1, b0), P(a1, b1), P(a0, b1)]; }
+
+
+  /* ----- loading truck (inclined conveyors): plan outline helper, shared by the plan, floor layout and plant layout ----- */
+  function truckPlan(V, tk, o) {
+    o = o || {}; var A = tk.A, B = tk.B, hb = tk.W / 2, x = tk.x, y = tk.y, tx = o.tH || 100;
+    function R(a0, a1, b0, b1, layer) { V.poly(rect([x, y], A, B, a0, a1, b0, b1), true, layer || 'TRUCK'); }
+    function pt2(a, b) { return [(x + A[0] * a + B[0] * b) * MM, (y + A[1] * a + B[1] * b) * MM]; }
+    R(tk.a0, tk.a1, -hb, hb); R(tk.a0 + 0.08, tk.a1 - 0.08, -hb + 0.08, hb - 0.08, 'TRUCK_IND');   // body and inside of the walls
+    R(tk.cabA0, tk.cabA0 + 1.4, -tk.cabW / 2, tk.cabW / 2); R(tk.cabA0 + 1.4, tk.cabEnd, -tk.cabW / 2 + 0.05, tk.cabW / 2 - 0.05);
+    tk.axles.forEach(function (ax) { [1, -1].forEach(function (sg) { var bc = sg * (hb - 0.12); R(ax - tk.wheelR, ax + tk.wheelR, bc - tk.tyreW / 2, bc + tk.tyreW / 2, 'TRUCK_IND'); }); });
+    R(-tk.hs, tk.hs, -tk.hs, tk.hs, 'TRUCK_IND');   // illustrative heap under the discharge point
+    V.text(pt2((tk.a0 + tk.a1) / 2, 0), 'TRUCK (indicative)', tx * 0.8, 'TRUCK', { mid: true });
+    if (o.dims) {
+      var offA = function (u, toward, d) { var ln = [-u[1], u[0]]; return (ln[0] * toward[0] + ln[1] * toward[1]) >= 0 ? d : -d; };
+      V.dim(pt2(tk.a0, hb), pt2(tk.a1, hb), offA(A, B, 380), 'Truck body length ' + mmTxt(tk.L) + (tk.ent.L ? '' : ' *'), tk.ent.L ? 'entered' : 'ind');
+      V.dim(pt2(tk.a0, -hb), pt2(tk.a0, hb), offA(B, [-A[0], -A[1]], 380), 'Truck body width ' + mmTxt(tk.W) + (tk.ent.W ? '' : ' *'), tk.ent.W ? 'entered' : 'ind');
+    }
+  }
 
   /* ===================================================== build */
   function build(inp, meta) {
@@ -153,6 +172,7 @@
         P.text([cen[0] + sgn * 0, cen[1] - 380], label + 'Curve ' + (d.direction === 'right' ? 'R' : 'L') + ' R' + Math.round(d.radius * MM) + ' x ' + ang(d.angle) + ' (arc ' + mmTxt(d.length) + ')', 0, 'DIM_CALC', { rel: true, mid: true });
       } else { P.dim(A, B, 480 + (k % 3) * 300, label + 'Incline ' + mmTxt(d.horizontal) + ' run / ' + mmTxt(Math.abs(d.rise)) + ' rise / ' + ang(Math.abs(d.angle)), 'calc'); }
     });
+    if (sc.truck) truckPlan(P, sc.truck, { dims: true, tH: 120 });
     M.views.push(P);
     var FV = null;
     if (sc.floor) {
@@ -163,6 +183,7 @@
       FV.poly(L1, false, 'OUTLINE'); FV.poly(R1, false, 'OUTLINE'); FV.line(L1[0], R1[0], 'OUTLINE'); FV.line(L1[L1.length - 1], R1[R1.length - 1], 'OUTLINE');
       FV.poly(sts.map(function (st) { return [st.p[0] * MM, st.p[1] * MM]; }), false, 'CENTRE');
       FV.text([fS.p[0] * MM, fS.p[1] * MM], 'IN', 0, 'TITLE', { rel: true }); FV.text([fE.p[0] * MM, fE.p[1] * MM], 'OUT', 0, 'TITLE', { rel: true });
+      if (sc.truck) truckPlan(FV, sc.truck, { tH: 200 });
     } else M.notes.push('Floor size not entered - floor layout view omitted.');
 
     /* ---------- DEVELOPED SIDE ELEVATION (x = horizontal route distance, y = height) ---------- */
@@ -209,6 +230,29 @@
       if (e.posEntered && x > 1) E.dim([0, yb], [x, yb], -120, eqText(e) + ' ' + Math.round(x) + ' mm from inlet (horizontal)' + (Math.abs(x - e.sM * MM) > 1 ? ' | route ' + Math.round(e.sM * MM) + ' mm' : ''), 'entered');
       if (e.mountEntered && Math.abs(e.mountM) > 0.02) E.dim([x + hl + 60, e.beltTopZ * MM], [x + hl + 60, zc], 90, eqText(e) + ' ' + (e.mountM >= 0 ? '+' : '') + Math.round(e.mountM * MM) + ' from belt top', 'entered');
     });
+
+    if (sc.truck) (function () {   // loading truck beside the discharge end (side elevation, x = horizontal distance along the route direction)
+      var tk = sc.truck, inl = tk.mode === 'inline', z0 = tk.deck * MM, z1 = (tk.deck + tk.wall) * MM, hb = tk.W / 2, Rw = tk.wheelR * MM, xe = totalH, X = function (a) { return xe + a * MM; }, xs0 = inl ? X(tk.a0) : X(-hb), xs1 = inl ? X(tk.a1) : X(hb);
+      function Rc(xa, xb, za, zb, layer) { E.poly([[xa, za], [xb, za], [xb, zb], [xa, zb]], true, layer || 'TRUCK'); }
+      Rc(xs0, xs1, z0 - 120, z0); Rc(xs0, xs1, z0, z1); Rc(xs0 + 80, xs1 - 80, z0, z1, 'TRUCK_IND');
+      if (inl) {
+        Rc(X(tk.a1 - 0.08), X(tk.a1), z1, (tk.headTop) * MM); Rc(X(tk.a0 - 0.25), X(tk.cabEnd), z0 - 320, z0 - 120);
+        Rc(X(tk.cabA0), X(tk.cabA0 + 1.4), z0 - 120, tk.cabTop * MM); Rc(X(tk.cabA0 + 1.4), X(tk.cabEnd), z0 - 120, z0 + 800);
+        Rc(X(tk.cabA0 + 1.4), X(tk.cabA0 + 1.405), z0 + 800, z0 + 1550, 'TRUCK_IND');
+        tk.axles.forEach(function (ax) { E.circle([X(ax), Rw], Rw, 'TRUCK'); E.circle([X(ax), Rw], Rw * 0.5, 'TRUCK_IND'); });
+      } else {
+        Rc(X(-tk.cabW / 2), X(tk.cabW / 2), z1, tk.cabTop * MM, 'TRUCK_IND');   // cab seen end-on behind the body
+        [1, -1].forEach(function (sg) { var wx = X(sg * (hb - 0.12)); Rc(wx - tk.tyreW * MM / 2, wx + tk.tyreW * MM / 2, 0, 2 * Rw); });
+      }
+      var hz = tk.hk * MM, hx = tk.hs * MM; E.poly([[xe - hx, z0], [xe + hx, z0], [xe, z0 + hz]], true, 'TRUCK_IND');
+      E.text([(xs0 + xs1) / 2, z1 + 200], 'TRUCK (indicative) - ' + (inl ? 'in line beyond the discharge' : 'across the discharge end, seen end-on'), 0, 'TRUCK', { rel: true, mid: true });
+      var nk = tk.ent;
+      E.dim([xs0, 0], [xs0, z0], 260, 'Bed height ' + Math.round(z0) + ' mm' + (nk.deck ? '' : ' *'), nk.deck ? 'entered' : 'ind');
+      E.dim([xs0, z0], [xs0, z1], 260 + 440, 'Side wall ' + Math.round(z1 - z0) + ' mm' + (nk.wall ? '' : ' *'), nk.wall ? 'entered' : 'ind');
+      E.dim([xs0, -300], [xs1, -300], -900, 'Truck body ' + (inl ? 'length ' + Math.round(tk.L * MM) + (nk.L ? '' : ' *') : 'width ' + Math.round(tk.W * MM) + (nk.W ? '' : ' *')) + ' (seen in this view)', (inl ? nk.L : nk.W) ? 'entered' : 'ind');
+      if (tk.dropM > 0.05) E.dim([xe, z0], [xe, tk.dischargeZ * MM], -200, 'Drop to truck bed ' + Math.round(tk.dropM * MM) + ' mm', 'calc');
+      if (isFinite(tk.wallClearM) && tk.wallClearM > 0.02) E.dim([X(-tk.nearM), z1], [X(-tk.nearM), z1 + tk.wallClearM * MM], -260, 'Belt frame to wall top ' + Math.round(tk.wallClearM * MM) + ' mm', 'calc');
+    })();
     var zmax = Math.max.apply(null, top.map(function (p) { return p[1]; })), dimY = Math.max(zmax, (desc.elevations.topOfProductM || 0) * MM) + 500;
     E.dim([0, 0], [0, fS.p[2] * MM], 320, 'Inlet height ' + mmTxt(fS.p[2]) + (desc.elevations.basis === 'illustrative' ? ' (illustrative)' : ''), desc.elevations.basis === 'illustrative' ? 'ind' : 'entered');
     if (Math.abs(fE.p[2] - fS.p[2]) > 0.02) E.dim([totalH, 0], [totalH, fE.p[2] * MM], -320, 'Discharge height ' + mmTxt(fE.p[2]), 'calc');
@@ -394,6 +438,17 @@
       add(tag + 'footprint diameter', mmS(2 * (d.radius + sc.hw + sc.thk)) + ' mm', Cc, 'belt + frame only; guards, drive and access extra');
       add(tag + 'centre column diameter', mmS(2 * q.colR) + ' mm', I, 'placeholder'); add(tag + 'centre column height', mmS(q.colTop) + ' mm', I, 'placeholder');
     });
+    if (sc.truck) {
+      var tk = sc.truck, tg = 'Loading truck ';
+      add(tg + 'position', tk.mode === 'inline' ? 'in line, beyond the discharge' : 'across the discharge end', E, 'option ticked in the 3D view');
+      add(tg + 'body length', mmS(tk.L) + ' mm', tk.ent.L ? E : I, tk.ent.L ? '' : 'placeholder - enter the real truck'); add(tg + 'body width', mmS(tk.W) + ' mm', tk.ent.W ? E : I, tk.ent.W ? '' : 'placeholder');
+      add(tg + 'bed height above floor', mmS(tk.deck) + ' mm', tk.ent.deck ? E : I, tk.ent.deck ? '' : 'placeholder'); add(tg + 'side wall height', mmS(tk.wall) + ' mm', tk.ent.wall ? E : I, tk.ent.wall ? '' : 'placeholder');
+      if (tk.mode === 'inline') add(tg + 'belt head overhang over body', mmS(tk.ov) + ' mm', tk.ent.ov ? E : I, tk.ent.ov ? '' : 'placeholder');
+      add(tg + 'discharge height', mmS(tk.dischargeZ) + ' mm', Cc, ''); add(tg + 'drop to bed', mmS(tk.dropM) + ' mm', Cc, '');
+      add(tg + 'discharge above side wall top', mmS(tk.aboveWallM) + ' mm', Cc, tk.aboveWallM <= 0.02 ? 'ENGINEERING REVIEW: product may not clear the wall' : '');
+      add(tg + 'belt frame to wall top (' + mmS(tk.nearM) + ' mm back)', mmS(tk.wallClearM) + ' mm', Cc, tk.wallClearM < 0 ? 'ENGINEERING REVIEW: belt may foul the truck' : '');
+      add(tg + 'cab, wheels, axles, heap', 'drawn', I, 'illustrative only; no truck selected, no axle load or reach check');
+    }
     (sc.hyd || []).length && add('Hydraulic / mobile stands', String(sc.hyd.length) + ' (see stand schedule)', Cc, 'cylinder, pump and capacity not selected');
     (sc.equip || []).length && add('Drive, sensors and other equipment', String(sc.equip.length) + ' (see equipment schedule)', E, 'not selected or sized by this tool');
     (sc.equip || []).length || add('Drive motor', 'not selected', I, 'Engineering review required');
@@ -435,12 +490,12 @@
     var PS = null; try { PS = buildPlant(M); } catch (e) { PS = null; }   // plant layout drawing, placed below the title block
     if (PS) { var pv = PS.views[0], ph = textSize(pv), psz = viewSize(pv), py = bottom - 8 * ph - psz[1]; d.text([0, py + psz[1] + 4 * ph], 'PLANT LAYOUT (room, trenches, machines, conveyor flow) - ' + mtitle, ph * 1.4, 'TITLE'); emitPrims(d, prims(pv, ph), -pv.min[0], py - pv.min[1]); bottom = py - 6 * ph; }
     // 3-D model placed to the right of the 2-D layout
-    var sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D', hyd: 'HYD3D' };
+    var sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D', hyd: 'HYD3D', truck: 'TRUCK3D' };
     var lo = [1e18, 1e18, 1e18], hi = [-1e18, -1e18, -1e18], src = [1e18, 1e18, 1e18];
     sc.polys.forEach(function (q) { if (q.tag === 'prod') return; q.p.forEach(function (p) { for (var i = 0; i < 3; i++) src[i] = Math.min(src[i], p[i] * MM); }); });
     var ox = L.right + 6000 - src[0], oy = L.top - 1000 - (function () { var m = -1e18; sc.polys.forEach(function (q) { if (q.tag !== 'prod') q.p.forEach(function (p) { m = Math.max(m, p[1] * MM); }); }); return m; })();
     function P3(p) { var q = [p[0] * MM + ox, p[1] * MM + oy, p[2] * MM]; for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return q; }
-    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P3), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' || q.tag === 'hyd' ? nearestAci(q.c) : 0)); });
+    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P3), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' || q.tag === 'hyd' || q.tag === 'truck' ? nearestAci(q.c) : 0)); });
     d.poly3(sc.stations.map(function (s) { return P3(s.p); }), 'CENTRE');
     var h3 = Math.max(60, Math.round(Math.max(hi[0] - lo[0], hi[1] - lo[1]) / 120 / 10) * 10);
     sc.dims.forEach(function (m) { var a = P3(m.a), b = P3(m.b); d.line(a, b, DIMLAYER[m.kind] || 'DIM_CALC'); var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], dx = b[0] - a[0], dy = b[1] - a[1], rot = Math.atan2(dy, dx) * 180 / Math.PI; if (rot > 90) rot -= 180; if (rot <= -90) rot += 180; d.g(0, 'TEXT'); d.g(8, d.use(DIMLAYER[m.kind] || 'DIM_CALC')); d.g(10, f(mid[0])); d.g(20, f(mid[1])); d.g(30, f(mid[2])); d.g(40, f(h3)); d.g(1, ascii(m.text)); if (Math.abs(dx) + Math.abs(dy) > 1e-6) d.g(50, f(rot)); });
@@ -453,7 +508,7 @@
     opt = opt || {}; var d = new DXF(), sc = M.sc, belt = nearestAci(sc.beltRgb), lay = { belt: 'BELT3D', frame: 'FRAME3D_IND', support: 'SUPPORT3D_IND', drive: 'DRIVE3D_IND', floor: 'FLOOR3D', obst: 'OBSTACLE3D', equip: 'EQUIP3D', hyd: 'HYD3D' };
     var lo = [1e18, 1e18, 1e18], hi = [-1e18, -1e18, -1e18];
     function P(p) { var q = [p[0] * MM, p[1] * MM, p[2] * MM]; for (var i = 0; i < 3; i++) { lo[i] = Math.min(lo[i], q[i]); hi[i] = Math.max(hi[i], q[i]); } return q; }
-    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' || q.tag === 'hyd' ? nearestAci(q.c) : 0)); });
+    sc.polys.forEach(function (q) { if (q.tag === 'prod') return; if (q.tag === 'floor' && q.n[2] < 0.9) return; d.face(q.p.map(P), lay[q.tag] || 'MODEL3D', q.tag === 'belt' ? belt : (q.tag === 'equip' || q.tag === 'hyd' || q.tag === 'truck' ? nearestAci(q.c) : 0)); });
     d.poly3(sc.stations.map(function (s) { return P(s.p); }), 'CENTRE');
     var h = Math.max(60, Math.round(Math.max(hi[0] - lo[0], hi[1] - lo[1]) / 120 / 10) * 10);
     sc.dims.forEach(function (m) { var a = P(m.a), b = P(m.b); d.line(a, b, DIMLAYER[m.kind] || 'DIM_CALC'); var mid = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], dx = b[0] - a[0], dy = b[1] - a[1], rot = Math.atan2(dy, dx) * 180 / Math.PI; if (rot > 90) rot -= 180; if (rot <= -90) rot += 180; d.g(0, 'TEXT'); d.g(8, d.use(DIMLAYER[m.kind] || 'DIM_CALC')); d.g(10, f(mid[0])); d.g(20, f(mid[1])); d.g(30, f(mid[2])); d.g(40, f(h)); d.g(1, ascii(m.text)); if (Math.abs(dx) + Math.abs(dy) > 1e-6) d.g(50, f(rot)); });
@@ -804,7 +859,8 @@
     }
     var up = String(inp.upstream || '').trim(), dn = String(inp.downstream || '').trim();
     if (up) { machine(fS, true, up, 'UPSTREAM'); add('Upstream machine', up, 'entered', 'box size is a placeholder'); }
-    if (dn) { machine(fE, false, dn, 'DOWNSTREAM'); add('Downstream machine', dn, 'entered', 'box size is a placeholder'); }
+    if (sc.truck) { truckPlan(V, sc.truck, { tH: tH, dims: true }); add('Loading truck', (sc.truck.mode === 'inline' ? 'in line' : 'across') + ', body ' + mmTxt(sc.truck.L) + ' x ' + mmTxt(sc.truck.W) + (sc.truck.ent.L && sc.truck.ent.W ? '' : ' *'), sc.truck.ent.L && sc.truck.ent.W ? 'entered' : 'indicative *', 'discharge ' + mmTxt(sc.truck.dischargeZ) + ', bed ' + mmTxt(sc.truck.deck)); if (dn) add('Downstream machine', dn + ' (replaced by the truck in this drawing)', 'entered', ''); }
+    else if (dn) { machine(fE, false, dn, 'DOWNSTREAM'); add('Downstream machine', dn, 'entered', 'box size is a placeholder'); }
     /* drive: entered motors/equipment are listed; otherwise a grey gear-motor placeholder at the discharge end */
     var motors = (sc.equip || []).filter(function (e) { return e.type === 'motor'; });
     if (motors.length) {

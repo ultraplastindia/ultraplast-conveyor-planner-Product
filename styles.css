@@ -486,3 +486,5 @@ h3.cch:hover{color:var(--red-d)}
 @media print{.ccbar{display:none}h3.cch::after{display:none}.card.cc{padding-top:inherit;padding-bottom:inherit}}
 .optgrp{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:4px 14px;margin:0 0 10px;padding:8px 10px}
 .optgrp legend{font-weight:600}
+
+.truckopts{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center;width:100%;padding:6px 0 2px}.truckopts[hidden]{display:none}.truckopts .note{flex-basis:100%;margin:0}

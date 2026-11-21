@@ -615,6 +615,7 @@
     var c = V3.hexToRgb(inp.beltColor); if (c) return c;
     var def = { pp: '#2f6fb5', slat: '#8a9099', ss: '#b9bfc6', pu: '#f2f2f0', other: '#3a404a' }; return V3.hexToRgb(def[behaviourOf(inp, res).type]);
   }
+  var truckTimer = null, truckSel = null;   // loading-truck choice made in the 3D view (inclined conveyors); not customer data
   function v3dScene(inp, res, plan, detail) {
     var t = res.throughput, gap = inp.gap && !isNaN(inp.gap) ? inp.gap : 0, along = t.productPitchMm ? t.productPitchMm - gap : null;
     return {
@@ -623,7 +624,7 @@
       legSpacingMm: P.engineering.legSpacingMm, guideRails: !!inp.guideRails, detail: detail, beltRgb: beltRgbOf(inp, res),
       prod: { alongMm: along, acrossMm: t.acrossMm, heightMm: inp.prodHeight, pitchMm: t.productPitchMm, lanes: t.lanes },
       equip: inp.equipment, fmt: fmtLen, fmtMm: fmtMm,
-      roomName: inp.roomName, projectName: inp.projectName, upstream: inp.upstream, downstream: inp.downstream, lanes: t.lanes
+      truck: truckSel, roomName: inp.roomName, projectName: inp.projectName, upstream: inp.upstream, downstream: inp.downstream, lanes: t.lanes
     };
   }
   /* ---- CAD-style drawing: 2D views + 3D model, DXF / SVG downloads ---- */
@@ -865,9 +866,22 @@
     toast('Measurement updated and recalculated.');
   }
   function v3dOpts(inp, res, plan, extra) {
+    var inp0 = inp, res0 = res;
     var ad = hydAdjusted(inp, res); if (ad.res !== res) { inp = ad.inp; res = ad.res; plan = simPlan(inp, res); }
     var mv = movAdjusted(inp, res); if (mv.res !== res) { inp = mv.inp; res = mv.res; plan = simPlan(inp, res); }
     var t = res.throughput, o = { scene: v3dScene(inp, res, plan, !(extra && extra.compact)), speedMPerMin: plan.speed, pitchMm: t.productPitchMm, lanes: t.lanes, behaviour: behaviourOf(inp, res), productRgb: V3.hexToRgb(inp.productColor) };
+    if (!(extra && extra.compact)) o.onTruck = function (p) {   // keep the drawings in step with the truck shown in 3D
+      truckSel = p; if (truckTimer) clearTimeout(truckTimer);
+      truckTimer = setTimeout(function () {   // short delay + keep the download buttons in place, so a click that caused this change is not lost
+        var el = document.getElementById('cadCard'); if (!el) return;
+        try {
+          var tmp = document.createElement('div'); tmp.innerHTML = cadCard(inp0, res0); var nw = tmp.firstElementChild; if (!nw) return;
+          var oc = Array.prototype.slice.call(el.children), nc = Array.prototype.slice.call(nw.children);
+          if (oc.length !== nc.length) { el.replaceWith(nw); return; }
+          oc.forEach(function (c, i) { if (!c.classList.contains('cadbtns')) c.replaceWith(nc[i]); });
+        } catch (e) { }
+      }, 250);
+    };
     for (var k in extra) o[k] = extra[k]; return o;
   }
   function start3d(inp, res, extra) {

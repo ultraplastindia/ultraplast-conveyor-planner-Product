@@ -588,7 +588,93 @@
     var d0 = pts3[0], d1 = pts3[pts3.length - 1], hd = Math.atan2(d1[1] - d0[1], d1[0] - d0[0]); if (Math.abs(d1[0] - d0[0]) + Math.abs(d1[1] - d0[1]) < 1e-6) hd = Math.atan2(sts[0].t[1], sts[0].t[0]);
     sc.axisTheta = Math.round(hd / (Math.PI / 2)) * 90;
     sc.geom = { widthM: W_, baseZ: base.z, baseBasis: base.basis, totalM: total, frameDepth: fd, prodH: prodH, upv: upv };
+    sc.hasIncline = details.some(function (d) { return d.type === 'incline'; });
+    sc._b0 = { all: { min: sc.all.min.slice(), max: sc.all.max.slice() }, conv: { min: sc.conv.min.slice(), max: sc.conv.max.slice() } };
+    sc._fmt = fmt; sc._fmtMm = fmtMm;
+    if (sc.hasIncline && inp.truck && inp.truck.on) addTruck(sc, inp.truck);
     return sc;
+  }
+
+  /* ---- Loading truck at the discharge end of an inclined conveyor (indicative; every size not typed by the user is a grey placeholder) ---- */
+  var TRK = { L: 6.0, W: 2.4, deck: 1.1, wall: 1.0, ov: 0.8, cabL: 2.0, wheelR: 0.5, tyreW: 0.3, tk: 0.08 };
+  var TCOL = { body: [58, 104, 168], floor: [92, 98, 108], chassis: [48, 50, 56], cab: [236, 238, 240], glass: [120, 160, 190], tyre: [28, 28, 30], hub: [170, 174, 180], grille: [60, 62, 68], heap: [226, 164, 72] };
+  function truckSizes(T) {
+    var q = function (mm, d) { return pos(mm) ? mm / 1000 : d; };
+    return { mode: T.mode === 'inline' ? 'inline' : 'across', L: q(T.L, TRK.L), W: q(T.W, TRK.W), deck: q(T.deck, TRK.deck), wall: q(T.wall, TRK.wall), ov: q(T.ov, TRK.ov), cabL: TRK.cabL,
+      ent: { L: pos(T.L), W: pos(T.W), deck: pos(T.deck), wall: pos(T.wall), ov: pos(T.ov) } };
+  }
+  function cyl(c, ax, r, hl, color, tag, out, nSeg) {   // wheel: axis ax (unit, horizontal), radius r, half length hl
+    var A = norm(cross([0, 0, 1], ax)), U = [0, 0, 1], n = nSeg || 14, k, ring0 = [], ring1 = [], dirs = [];
+    for (k = 0; k < n; k++) { var th = 2 * Math.PI * k / n, d = add(mul(A, Math.cos(th)), mul(U, Math.sin(th))); dirs.push(d); ring0.push(add(add(c, mul(d, r)), mul(ax, -hl))); ring1.push(add(add(c, mul(d, r)), mul(ax, hl))); }
+    for (k = 0; k < n; k++) { var k1 = (k + 1) % n; out.push(poly([ring0[k], ring0[k1], ring1[k1], ring1[k]], norm(add(dirs[k], dirs[k1])), color, { tag: tag })); }
+    out.push(poly(ring1.slice(), ax, color, { tag: tag })); out.push(poly(ring0.slice().reverse(), mul(ax, -1), color, { tag: tag }));
+  }
+  function removeTruck(sc) {
+    sc.polys = sc.polys.filter(function (q) { return q.tag !== 'truck'; });
+    sc.dims = sc.dims.filter(function (d) { return !d.truck; }); sc.tags = sc.tags.filter(function (g) { return !g.truck; });
+    sc.notes = sc.notes.filter(function (n) { return n.indexOf('Truck:') !== 0; });
+    sc.truck = null;
+    if (sc._b0) { sc.all = { min: sc._b0.all.min.slice(), max: sc._b0.all.max.slice() }; sc.conv = { min: sc._b0.conv.min.slice(), max: sc._b0.conv.max.slice() }; }
+  }
+  function addTruck(sc, Tin) {
+    removeTruck(sc);
+    var T = truckSizes(Tin), fmt = sc._fmt, fmtMm = sc._fmtMm, sts = sc.stations, fE = sts[sts.length - 1], tr = sc.track;
+    var th = norm([fE.t[0], fE.t[1], 0]), lh = [-th[1], th[0], 0], U = [0, 0, 1], D = [fE.p[0], fE.p[1], 0], zE = fE.p[2];
+    var A = T.mode === 'across' ? lh : th, B = T.mode === 'across' ? th : lh;   // A = long axis of the truck body, B = across it
+    var a0 = T.mode === 'across' ? -T.L / 2 : -T.ov, a1 = a0 + T.L, hb = T.W / 2, z0 = T.deck, z1 = T.deck + T.wall, tk = TRK.tk, Rw = TRK.wheelR, P = [];
+    var O = D;
+    function box(ra, rb, rz, col) { obox(O, A, B, U, ra, rb, rz, col, { tag: 'truck' }).forEach(function (q) { P.push(q); }); }
+    function pt(a, b, z) { return [O[0] + A[0] * a + B[0] * b, O[1] + A[1] * a + B[1] * b, z]; }
+    // chassis rails, body floor, side walls, tail gate and headboard
+    var cabA0 = a1 + 0.15, cabEnd = cabA0 + T.cabL, tailA = a0 - 0.25;
+    box([tailA, cabEnd - 0.1], [-0.45, 0.45], [z0 - 0.32, z0 - 0.12], TCOL.chassis);
+    box([a0, a1], [-hb, hb], [z0 - 0.12, z0], TCOL.floor);
+    box([a0, a1], [-hb, -hb + tk], [z0, z1], TCOL.body); box([a0, a1], [hb - tk, hb], [z0, z1], TCOL.body);
+    box([a0, a0 + tk], [-hb, hb], [z0, z1], TCOL.body);
+    box([a1 - tk, a1], [-hb, hb], [z0, z1 + 0.3], TCOL.body);
+    box([a0, a1], [-hb - 0.02, -hb], [z1 - 0.06, z1 + 0.02], TCOL.chassis); box([a0, a1], [hb, hb + 0.02], [z1 - 0.06, z1 + 0.02], TCOL.chassis);   // top rails
+    // cab, bonnet, windscreen, grille
+    var cw = Math.min(T.W, 2.5) - 0.1;
+    box([cabA0, cabA0 + 1.4], [-cw / 2, cw / 2], [z0 - 0.12, z0 + 1.75], TCOL.cab);
+    box([cabA0 + 1.4, cabEnd], [-cw / 2 + 0.05, cw / 2 - 0.05], [z0 - 0.12, z0 + 0.8], TCOL.cab);
+    box([cabA0 + 1.39, cabA0 + 1.405], [-cw / 2 + 0.1, cw / 2 - 0.1], [z0 + 0.8, z0 + 1.55], TCOL.glass);
+    box([cabEnd, cabEnd + 0.02], [-cw / 2 + 0.2, cw / 2 - 0.2], [z0 + 0.05, z0 + 0.65], TCOL.grille);
+    box([cabEnd - 0.05, cabEnd + 0.08], [-cw / 2, cw / 2], [z0 - 0.3, z0 - 0.12], TCOL.chassis);   // front bumper
+    // wheels: front axle under the cab, tandem rear axles under the body
+    var axles = [cabA0 + 0.55, a0 + T.L * 0.7, a0 + T.L * 0.7 + 1.3].filter(function (x, i) { return i === 0 || x < a1 - 0.3; });
+    axles.forEach(function (ax_, i) {
+      [1, -1].forEach(function (sg) {
+        var wc = pt(ax_, sg * (hb - 0.12 + (i === 0 ? -0.05 : 0)), Rw);
+        cyl(wc, B, Rw, TRK.tyreW / 2, TCOL.tyre, 'truck', P, 14); cyl(add(wc, mul(B, sg * (TRK.tyreW / 2 + 0.01))), B, Rw * 0.5, 0.012, TCOL.hub, 'truck', P, 10);
+      });
+      box([ax_ - 0.04, ax_ + 0.04], [-hb + 0.1, hb - 0.1], [Rw - 0.04, Rw + 0.04], TCOL.chassis);   // axle
+    });
+    // illustrative heap of material under the discharge point
+    var hk = Math.min(0.55, T.wall * 0.6), hs = Math.min(0.9, T.W * 0.35, T.L * 0.2);
+    (function () {
+      var c = [[-hs, -hs], [hs, -hs], [hs, hs], [-hs, hs]].map(function (v) { return pt(v[0], v[1], z0); }), tp = pt(0, 0, z0 + hk), i;
+      for (i = 0; i < 4; i++) { var q = [c[i], c[(i + 1) % 4], tp], n = norm(cross(sub(q[1], q[0]), sub(q[2], q[0]))); if (dot(n, sub(centroid(q), pt(0, 0, z0 + hk / 3))) < 0) n = mul(n, -1); P.push(poly(q, n, TCOL.heap, { tag: 'truck', two: false })); }
+    })();
+    P.forEach(function (q) { sc.polys.push(q); });
+    // calculated clearances from the route (no values are invented)
+    var nearA = T.mode === 'across' ? T.W / 2 : T.ov, sBack = Math.max(0, tr.length - nearA), zUnder = tr.at(sBack).z - sc.fd, droph = zE - z0, aboveWall = zE - z1, wallClear = zUnder - z1;
+    sc.truck = { mode: T.mode, L: T.L, W: T.W, deck: T.deck, wall: T.wall, ov: T.ov, cabL: T.cabL, ent: T.ent, dischargeZ: zE, dropM: droph, aboveWallM: aboveWall, wallClearM: wallClear, nearM: nearA, x: D[0], y: D[1], th: th, lh: lh, A: A, B: B, a0: a0, a1: a1, cabA0: cabA0, cabEnd: cabEnd, axles: axles, wheelR: Rw, tyreW: TRK.tyreW, cabW: cw, cabTop: z0 + 1.75, headTop: z1 + 0.3, hs: hs, hk: hk };
+    // dimensions and tags (3-D view)
+    function tdim(a, b, text, kind, o) { sc.dims.push({ a: a, b: b, text: text, kind: kind, dashed: !!(o && o.dashed), off: (o && o.off) || [0, -9], truck: true }); }
+        tdim(pt(a0, hb + 0.3, 0), pt(a1, hb + 0.3, 0), 'Truck body length ' + fmtMm(T.L * 1000) + (T.ent.L ? '' : ' *'), T.ent.L ? 'entered' : 'ind', { off: [0, 12] });
+    tdim(pt(a0 - 0.3, -hb, 0), pt(a0 - 0.3, hb, 0), 'Truck body width ' + fmtMm(T.W * 1000) + (T.ent.W ? '' : ' *'), T.ent.W ? 'entered' : 'ind', { off: [0, 12] });
+    tdim(pt(a1 + 0.0, hb + 0.45, 0), pt(a1 + 0.0, hb + 0.45, z0), 'Bed height ' + fmtMm(z0 * 1000) + (T.ent.deck ? '' : ' *'), T.ent.deck ? 'entered' : 'ind', { off: [-4, 0] });
+    tdim(pt(a0, -hb - 0.12, z0), pt(a0, -hb - 0.12, z1), 'Side wall ' + fmtMm(T.wall * 1000) + (T.ent.wall ? '' : ' *'), T.ent.wall ? 'entered' : 'ind', { off: [-4, 0] });
+    if (droph > 0.05) tdim(pt(0, 0.0, z0), pt(0, 0, zE), 'Drop to truck bed ' + fmtMm(droph * 1000), 'calc', { off: [6, 0] });
+    sc.tags.push({ p: pt(0, 0, Math.max(zE, z1) + 0.45), text: 'TRUCK (indicative) - ' + (T.mode === 'across' ? 'across the discharge end' : 'in line beyond the discharge'), kind: 'ind', short: 'TRUCK', truck: true });
+    // notes and checks
+    var msg = 'Truck: a loading truck is drawn at the discharge end (' + (T.mode === 'across' ? 'across the conveyor, body centred on the discharge point' : 'in line with the conveyor, belt head overhanging the body by ' + fmtMm(T.ov * 1000) + (T.ent.ov ? '' : ' *')) + '). Body ' + fmtMm(T.L * 1000) + ' × ' + fmtMm(T.W * 1000) + ', bed ' + fmtMm(T.deck * 1000) + ', side wall ' + fmtMm(T.wall * 1000) + ' - sizes marked * are placeholders; enter the real truck sizes. The cab, wheels, axles and the material heap are illustrative. This tool does not select a truck or check axle load, reach or safety.';
+    sc.notes.push(msg);
+    if (aboveWall <= 0.02) sc.notes.push('Truck: ENGINEERING REVIEW - the discharge point (' + fmtMm(zE * 1000) + ') is not above the truck side wall top (' + fmtMm(z1 * 1000) + '), so product would not drop clear into the body. Raise the discharge, lower the side wall or choose another truck.');
+    else if (wallClear < 0) sc.notes.push('Truck: ENGINEERING REVIEW - the belt frame underside, ' + fmtMm(nearA * 1000) + ' back from the discharge point, is ' + fmtMm(Math.abs(wallClear) * 1000) + ' below the truck side wall top, so the belt and frame may foul the truck.');
+    var gr = function (p) { for (var i = 0; i < 3; i++) { sc.all.min[i] = Math.min(sc.all.min[i], p[i]); sc.all.max[i] = Math.max(sc.all.max[i], p[i]); sc.conv.min[i] = Math.min(sc.conv.min[i], p[i]); sc.conv.max[i] = Math.max(sc.conv.max[i], p[i]); } };
+    P.forEach(function (q) { q.p.forEach(gr); });
+    if (sc.floor) { var out = false; P.forEach(function (q) { q.p.forEach(function (p) { if (p[0] < sc.floor.x0 - 0.01 || p[0] > sc.floor.x1 + 0.01 || p[1] < sc.floor.y0 - 0.01 || p[1] > sc.floor.y1 + 0.01) out = true; }); }); if (out) sc.notes.push('Truck: part of the truck lies outside the floor you entered. Check the discharge position or enlarge the floor.'); }
   }
 
   function gridFor(x0, y0, x1, y1) {
@@ -623,6 +709,15 @@
     var views = [['iso', 'Isometric'], ['top', 'Top'], ['front', 'Front'], ['back', 'Back'], ['inlet', 'Inlet end'], ['outlet', 'Outlet end']];
     if (compact) views = views.slice(0, 3);
     var spdTxt = vS > 0 ? String(Math.round(vS * 600) / 10) : '';
+    var T0 = opts.scene.truck || {};
+    function truckHtml() {   // inclined conveyors only: loading truck at the discharge end
+      if (!sc.hasIncline || compact) return '';
+      var f = function (k, lab, ph) { return '<label class="sim-speed">' + lab + ' <input type="number" min="0" step="10" inputmode="decimal" data-k="' + k + '" placeholder="' + ph + ' *" value="' + (pos(T0[k]) ? T0[k] : '') + '" style="width:92px"></label>'; };
+      return '<label class="chk truck-on"><input type="checkbox" data-k="on"' + (T0.on ? ' checked' : '') + '> Show loading truck at the discharge end</label>' +
+        '<span class="truckopts" data-o="truckopts"' + (T0.on ? '' : ' hidden') + '><label class="sim-speed">Truck position <select data-k="mode"><option value="across"' + (T0.mode === 'inline' ? '' : ' selected') + '>Across the conveyor end</option><option value="inline"' + (T0.mode === 'inline' ? ' selected' : '') + '>In line, beyond the discharge</option></select></label>' +
+        f('L', 'Body length (mm)', TRK.L * 1000) + f('W', 'Body width (mm)', TRK.W * 1000) + f('deck', 'Bed height (mm)', TRK.deck * 1000) + f('wall', 'Side wall height (mm)', TRK.wall * 1000) + f('ov', 'Belt head overhang, in line (mm)', TRK.ov * 1000) +
+        '<small class="note">Grey * = placeholder shown when left blank. Type the real truck sizes. The tool does not select a truck.</small></span>';
+    }
     root.innerHTML = '<div class="v3d-bar" role="toolbar" aria-label="3D view controls">' + views.map(function (v) { return '<button type="button" class="btn sm" data-v="' + v[0] + '">' + v[1] + '</button>'; }).join('') +
       '<button type="button" class="btn sm" data-a="fit">Fit conveyor</button>' + (compact ? '' : '<button type="button" class="btn sm" data-a="floor">Whole floor</button>' +
       '<button type="button" class="btn sm" data-a="ortho" aria-pressed="false">Orthographic</button><button type="button" class="btn sm" data-a="auto" aria-pressed="false">Auto-rotate</button>') +
@@ -632,7 +727,7 @@
       '<div class="v3d-bar v3d-opts">' + (canRun ? '<button type="button" class="btn sm primary" data-a="play">Play</button><button type="button" class="btn sm" data-a="restart">Restart</button>' + (compact ? '' : '<button type="button" class="btn sm" data-a="stop" aria-pressed="false">Stop belt (test)</button>') + '<label class="sim-speed">Playback <select data-a="scale">' + scales.map(function (x) { return '<option value="' + x + '"' + (x === scale ? ' selected' : '') + '>' + x + '×</option>'; }).join('') + '</select></label>' +
         (compact ? '' : '<label class="sim-speed">Belt speed (m/min) <input type="number" min="0.5" step="0.5" inputmode="decimal" data-a="speed" value="' + spdTxt + '" style="width:90px"></label>') : '') +
       '<label class="chk"><input type="checkbox" data-t="dims"' + (show.dims ? ' checked' : '') + '> Dimensions</label><label class="chk"><input type="checkbox" data-t="prods" checked> Products</label>' +
-      '<label class="chk"><input type="checkbox" data-t="frame" checked> Frame, supports, drive (indicative)</label><label class="chk"><input type="checkbox" data-t="equip" checked> Motor and sensors</label>' + (sc.hyd && sc.hyd.length ? '<label class="chk"><input type="checkbox" data-t="hyd" checked> Hydraulic stands</label>' : '') + '<label class="chk"><input type="checkbox" data-t="floor" checked> Floor and obstacles</label></div>' +
+      '<label class="chk"><input type="checkbox" data-t="frame" checked> Frame, supports, drive (indicative)</label><label class="chk"><input type="checkbox" data-t="equip" checked> Motor and sensors</label>' + (sc.hyd && sc.hyd.length ? '<label class="chk"><input type="checkbox" data-t="hyd" checked> Hydraulic stands</label>' : '') + '<label class="chk"><input type="checkbox" data-t="floor" checked> Floor and obstacles</label>' + truckHtml() + '</div>' +
       (compact || !canRun ? '' : '<p class="note" data-o="stopmsg" role="status"></p><div class="behave"><h4>Product behaviour check <span class="note">(illustrative - generic friction values, see notes)</span></h4><p data-o="vmax" class="vmax"></p><ul class="checks" data-o="checks"></ul>' +
         '<div class="v3d-bar"><label class="sim-speed">Belt-product friction μ <input type="number" min="0.05" max="1.5" step="0.01" data-b="mu" style="width:80px" value="' + beh.mu + '"></label>' +
         '<label class="sim-speed">Centre of gravity height (% of product) <input type="number" min="10" max="95" step="1" data-b="cog" style="width:80px" value="' + Math.round(beh.cogRatio * 100) + '"></label>' +
@@ -950,7 +1045,16 @@
       else if (a === 'full') { try { if (doc.fullscreenElement) doc.exitFullscreen(); else if (stage.requestFullscreen) stage.requestFullscreen(); } catch (er) { } }
       else if (a === 'png') { try { draw(); var link = doc.createElement('a'); link.download = 'Ultraplast-conveyor-3d.png'; link.href = canvas.toDataURL('image/png'); doc.body.appendChild(link); link.click(); doc.body.removeChild(link); } catch (er) { } }
     });
+    function refreshNote() { var nt = sc.notes.concat(desc.notes.filter(function (n) { return sc.notes.indexOf(n) < 0 && !/Inlet height was not entered/.test(n); })); if (canRun) nt.push('Products are drawn at their entered length, width and height.'); if (!compact) nt.push('Drawn to scale from your entries: floor, route, curve radii, inclines, elevations, belt width, product size. Frame, guides, supports, rollers and motor are indicative only; no structural or drive design is implied.'); noteEl.textContent = nt.join(' '); }
+    function truckChange() {
+      var g = function (k) { var el = root.querySelector('[data-k="' + k + '"]'); return el ? el : { value: '', checked: false }; }, p = { on: !!g('on').checked, mode: g('mode').value === 'inline' ? 'inline' : 'across' };
+      ['L', 'W', 'deck', 'wall', 'ov'].forEach(function (k) { var v = parseFloat(g(k).value); if (v > 0) p[k] = v; });
+      var bx = root.querySelector('[data-o="truckopts"]'); if (bx) bx.hidden = !p.on;
+      opts.scene.truck = p; if (p.on) addTruck(sc, p); else removeTruck(sc);
+      refreshNote(); fit(); if (typeof opts.onTruck === 'function') { try { opts.onTruck(p); } catch (er) { } }
+    }
     root.addEventListener('change', function (e) {
+      if (e.target.getAttribute('data-k')) { truckChange(); return; }
       var t = e.target.getAttribute('data-t'), a = e.target.getAttribute('data-a');
       var bn = e.target.getAttribute('data-b');
       if (t === 'collect') { collect = e.target.checked; need(); } else if (t) { show[t] = e.target.checked; need(); } else if (a === 'scale') scale = +e.target.value;
@@ -970,5 +1074,5 @@
     };
   }
 
-  return { hexToRgb: hexToRgb, IND: IND, buildScene: buildScene, describe: describe, baseElevation: baseElevation, create: create, extrude: extrude, obox: obox };
+  return { addTruck: addTruck, removeTruck: removeTruck, truckSizes: truckSizes, TRK: TRK, hexToRgb: hexToRgb, IND: IND, buildScene: buildScene, describe: describe, baseElevation: baseElevation, create: create, extrude: extrude, obox: obox };
 });
