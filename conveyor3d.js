@@ -117,6 +117,8 @@
       if (d.type === 'curve') { r.radiusM = d.radius; r.angleDeg = d.angle; r.direction = d.direction; }
       if (d.spiral) { r.spiral = true; r.riseM = d.rise; r.slopeDeg = d.slopeDeg; r.pitchM = d.pitch; r.turns = d.turns; }
       if (d.type === 'incline') { r.riseM = d.rise; r.slopeDeg = d.angle; }
+      if (d.screw) { r.screw = true; r.diaM = d.unitDia ? d.unitDia / 1000 : null; r.angleDeg = d.angle; }
+      if (d.bucket) { r.bucket = true; r.casingWM = d.casingW ? d.casingW / 1000 : null; r.casingDM = d.casingD ? d.casingD / 1000 : null; }
       out.segments.push(r);
     });
     var zmin = Math.min.apply(null, zs), zmax = Math.max.apply(null, zs), ph = inp.prod && pos(inp.prod.heightMm) ? inp.prod.heightMm / 1000 : null;
@@ -197,11 +199,16 @@
       var fr = frameFrom(here, t); fr.s = track.cum[pi]; return fr;
     });
     sc.stations = sts;
+    var bulkDet = details.filter(function (d) { return d.screw || d.bucket; });   // screw conveyors / bucket elevators are drawn as their own units, not as a belt
+    var bulkRanges = bulkDet.map(function (d) { return [track.cum[d.p0], track.cum[d.p1]]; });
+    function inBulkRow(k) { return bulkDet.some(function (d) { return idx[k] >= d.p0 && idx[k + 1] <= d.p1; }); }
+    sc.noSim = bulkDet.length > 0;
 
     // belt slab (top strips carry the moving slat lines and direction arrows)
     sc.beltRgb = inp.beltRgb && inp.beltRgb.length === 3 ? inp.beltRgb : COL.belt;
     var belt = extrude(sts, [[-hw, -bt], [hw, -bt], [hw, 0], [-hw, 0]], sc.beltRgb, { tag: 'belt' });
     belt.sides.forEach(function (row, k) {
+      if (inBulkRow(k)) return;
       row.forEach(function (q, e) { sc.polys.push(q); });
       var A = sts[k], B = sts[k + 1], q = row[2];
       q.top = { s0: A.s, s1: B.s, aL: at3(A, 0, hw, 0), aR: at3(A, 0, -hw, 0), bL: at3(B, 0, hw, 0), bR: at3(B, 0, -hw, 0) };
@@ -211,17 +218,17 @@
     sc.slat = pos(inp.pitchMm) ? inp.pitchMm / 1000 : IND.slat;
     if (total / sc.slat > 500) sc.slat = total / 500;
     var nArrows = Math.max(1, Math.min(8, Math.round(total / 1.5)));
-    for (i = 0; i < nArrows; i++) sc.arrows.push({ s: total * (i + 0.5) / nArrows, size: Math.max(0.03, Math.min(0.15, W_ * 0.22)) });
+    for (i = 0; i < nArrows; i++) { var sa = total * (i + 0.5) / nArrows; if (bulkRanges.some(function (r) { return sa > r[0] && sa < r[1]; })) continue; sc.arrows.push({ s: sa, size: Math.max(0.03, Math.min(0.15, W_ * 0.22)) }); }
 
     // side frame + guide rails (indicative)
-    var slopedRoute = (path.details || []).some(function (d) { return d.type === 'incline' || d.spiral || d.hyd; }), showGuide = !slopedRoute || !!inp.guideRails;   // inclined / declined / hydraulic / spiral conveyors get guide + hand rails only when the user enables them
+    var slopedRoute = (path.details || []).some(function (d) { return (d.type === 'incline' && !d.bucket && !d.screw) || d.spiral || d.hyd; }), showGuide = !slopedRoute || !!inp.guideRails;   // inclined / declined / hydraulic / spiral conveyors get guide + hand rails only when the user enables them
     var prodH = inp.prod && pos(inp.prod.heightMm) ? inp.prod.heightMm / 1000 : null, gH = prodH !== null ? Math.min(IND.guideH, prodH * 0.5) : IND.guideH;
     [1, -1].forEach(function (sg) {
       var sec = sg > 0 ? [[hw, -fd], [hw + thk, -fd], [hw + thk, 0.015], [hw, 0.015]] : [[-hw - thk, -fd], [-hw, -fd], [-hw, 0.015], [-hw - thk, 0.015]];
-      var pl = extrude(sts, sec, COL.frame, { tag: 'frame' }); pl.sides.forEach(function (r) { r.forEach(function (q) { sc.polys.push(q); }); }); pl.caps.forEach(function (q) { sc.polys.push(q); });
+      var pl = extrude(sts, sec, COL.frame, { tag: 'frame' }); pl.sides.forEach(function (r, k) { if (inBulkRow(k)) return; r.forEach(function (q) { sc.polys.push(q); }); }); pl.caps.forEach(function (q) { sc.polys.push(q); });
       if (!showGuide) return;
       var g0 = sg > 0 ? hw : -hw - IND.guideThk, gsec = [[g0, 0.015], [g0 + IND.guideThk, 0.015], [g0 + IND.guideThk, 0.015 + gH], [g0, 0.015 + gH]];
-      var gr = extrude(sts, gsec, COL.guide, { tag: 'frame' }); gr.sides.forEach(function (r) { r.forEach(function (q) { sc.polys.push(q); }); }); gr.caps.forEach(function (q) { sc.polys.push(q); });
+      var gr = extrude(sts, gsec, COL.guide, { tag: 'frame' }); gr.sides.forEach(function (r, k) { if (inBulkRow(k)) return; r.forEach(function (q) { sc.polys.push(q); }); }); gr.caps.forEach(function (q) { sc.polys.push(q); });
     });
 
     // end rollers (idler at the inlet, drive at the discharge) + motor (indicative)
@@ -245,6 +252,7 @@
     var wholeMobile = hydSeg.some(function (d) { return d.hydStyle === 'mobile'; });   // a movable conveyor is one free-standing unit: no fixed legs anywhere
     legPos.forEach(function (s) {
       if (wholeMobile) return;
+      if (bulkRanges.some(function (r) { return s > r[0] - 0.05 && s < r[1] + 0.05; })) return;   // screw conveyors / bucket elevators carry themselves
       if (spiralRanges.some(function (r) { return s > r[0] - 0.05 && s < r[1] + 0.05; })) return;   // the centre column and radial arms carry the spiral
       if (hydRanges.some(function (r) { return s > r[0] + 0.15 && s < r[1] - 0.15; })) return;   // the hydraulic stands carry this stretch
       var pt = track.at(s), tH = norm([pt.tx, pt.ty, 0]), lH = norm([-tH[1], tH[0], 0]), uu = [0, 0, 1], slopeCos = Math.sqrt(Math.max(0, 1 - pt.tz * pt.tz));
@@ -279,6 +287,101 @@
       sc.legCount += 1;
       sc.spirals.push({ seg: details.indexOf(d) + 1, cx: cx, cy: cy, radius: d.radius, turns: d.turns, rise: d.rise, pitch: d.pitch, colR: cR, colTop: colTop });
     });
+
+    /* ----- screw conveyors and bucket elevators (indicative layout models; Ultraplast engineering specifies the real unit) ----- */
+    sc.bulk = []; var bulkPolys = [];
+    bulkDet.forEach(function (d) {
+      var push = function (q) { sc.polys.push(q); bulkPolys.push(q); }, STEEL = [150, 156, 164], BRIGHT = [196, 202, 210], DARK = [58, 62, 70], HOP = [124, 134, 146], motorC = COL.motor;
+      var segNo = details.indexOf(d) + 1;
+      if (d.screw) {
+        var a3 = pts3[d.p0], b3 = pts3[d.p1], Av = norm(sub(b3, a3)), Lh = norm([-Av[1], Av[0], 0]); if (!(Math.abs(Av[0]) + Math.abs(Av[1]) > 1e-6)) Lh = [1, 0, 0];
+        var Up = norm(cross(Av, Lh)), Ls = len(sub(b3, a3)), D = d.unitDia ? d.unitDia / 1000 : 0.25, pitch = d.unitPitch ? d.unitPitch / 1000 : D, Rt = D / 2 + 0.02, Rf = D / 2, Rs = Math.max(0.015, D * 0.09);
+        var entD = !!d.unitDia, entP = !!d.unitPitch, nT = Ls / pitch;
+        if (nT > 70) pitch = Ls / 70;
+        var P = function (a, l, u) { return [a3[0] + Av[0] * a + Lh[0] * l + Up[0] * u, a3[1] + Av[1] * a + Lh[1] * l + Up[1] * u, a3[2] + Av[2] * a + Lh[2] * l + Up[2] * u]; };
+        // open U trough (lower half of the casing) with side flanges
+        var NS = 10, k, ring = [];
+        for (k = 0; k <= NS; k++) { var th = Math.PI + Math.PI * k / NS; ring.push([Math.cos(th) * Rt, Math.sin(th) * Rt]); }
+        for (k = 0; k < NS; k++) {
+          var r0 = ring[k], r1 = ring[k + 1], qd = [P(0, r0[0], r0[1]), P(0, r1[0], r1[1]), P(Ls, r1[0], r1[1]), P(Ls, r0[0], r0[1])], mid = [(r0[0] + r1[0]) / 2, (r0[1] + r1[1]) / 2];
+          push(poly(qd, norm(add(mul(Lh, -mid[0]), mul(Up, -mid[1]))), STEEL, { tag: 'frame', two: true }));
+        }
+        [1, -1].forEach(function (sg) { obox(P(0, 0, 0), Av, Lh, Up, [0, Ls], [sg * Rt - 0.018 + (sg > 0 ? 0.018 : 0), sg * Rt + 0.03 * sg + (sg > 0 ? 0 : 0.018)].sort(function (x, y) { return x - y; }), [-0.012, 0.012], STEEL, { tag: 'frame' }).forEach(push); });
+        // shaft and helical flight
+        cylinder({ p: P(0, 0, 0), t: Lh, l: Av, u: Up }, Rs, -0.1, Ls + 0.1, DARK, { tag: 'drive' }).forEach(push);
+        var steps = Math.max(10, Math.ceil(nT > 70 ? 70 : nT) * 12);
+        for (k = 0; k < steps; k++) {
+          var t0 = k / steps * Ls, t1 = (k + 1) / steps * Ls, w0 = 2 * Math.PI * t0 / pitch, w1 = 2 * Math.PI * t1 / pitch;
+          var q1 = [P(t0, Math.cos(w0) * Rs, Math.sin(w0) * Rs), P(t0, Math.cos(w0) * Rf, Math.sin(w0) * Rf), P(t1, Math.cos(w1) * Rf, Math.sin(w1) * Rf), P(t1, Math.cos(w1) * Rs, Math.sin(w1) * Rs)];
+          push(poly(q1, Av, BRIGHT, { tag: 'drive', two: true }));
+        }
+        // end plates, bearings, inlet hopper (start), discharge spout (end), drive
+        obox(P(0, 0, 0), Av, Lh, Up, [-0.03, 0], [-Rt - 0.03, Rt + 0.03], [-Rt - 0.03, Rt + 0.03], STEEL, { tag: 'frame' }).forEach(push);
+        obox(P(Ls, 0, 0), Av, Lh, Up, [0, 0.03], [-Rt - 0.03, Rt + 0.03], [-Rt - 0.03, Rt + 0.03], STEEL, { tag: 'frame' }).forEach(push);
+        obox(P(-0.03, 0, 0), Av, Lh, Up, [-0.1, 0], [-0.06, 0.06], [-0.06, 0.06], DARK, { tag: 'drive' }).forEach(push);
+        var hA = Math.min(0.3 * Ls, 3 * D + 0.1), hb = [Rt + 0.05, 2.0 * Rt + 0.1], zh = Rt + 0.35;   // hopper: wide mouth at the top, narrow throat on the trough
+        (function () {
+          var c0 = [[0.02, -Rt * 0.8], [0.02 + 2 * Rt, -Rt * 0.8], [0.02 + 2 * Rt, Rt * 0.8], [0.02, Rt * 0.8]], c1 = [[0.0, -Rt * 1.5], [hA, -Rt * 1.5], [hA, Rt * 1.5], [0.0, Rt * 1.5]], j;
+          var lo = c0.map(function (v) { return P(v[0], v[1], Rt - 0.01); }), hi = c1.map(function (v) { return P(v[0], v[1], zh); });
+          for (j = 0; j < 4; j++) { var jn = (j + 1) % 4, qh = [lo[j], lo[jn], hi[jn], hi[j]]; push(poly(qh, norm(cross(sub(qh[1], qh[0]), sub(qh[2], qh[0]))), HOP, { tag: 'frame', two: true })); }
+        })();
+        obox(P(Ls - 0.25, 0, 0), Av, Lh, Up, [0, 0.25], [-D * 0.45, D * 0.45], [-Rt - 0.3, -Rt], HOP, { tag: 'frame', a: 1 }).forEach(push);
+        var driveBox = obox(P(Ls + 0.03, 0, 0), Av, Lh, Up, [0, 0.22], [-0.11, 0.11], [-0.11, 0.11], [90, 96, 110], { tag: 'drive' }); driveBox.forEach(push);
+        if (!userMotor) obox(P(Ls + 0.25, 0, 0), Av, Lh, Up, [0, 0.38], [-0.13, 0.13], [-0.13, 0.13], motorC, { tag: 'drive' }).forEach(push);
+        // supports: saddles on legs (placeholder spacing)
+        var nLeg = Math.max(2, Math.round(Ls / (pos(inp.legSpacingMm) ? inp.legSpacingMm / 1000 : IND.legSpacing)) + 1), kl;
+        var bLegs = [];
+        for (kl = 0; kl < nLeg; kl++) {
+          var sa = 0.2 + (Ls - 0.4) * kl / (nLeg - 1), pc = P(sa, 0, 0), zb = pc[2] - Rt - 0.02 * 0; if (zb < 0.1) continue;
+          bLegs.push({ a: sa, zb: zb, x: pc[0], y: pc[1] });
+          var tH = norm([Av[0], Av[1], 0]), lH = [-tH[1], tH[0], 0];
+          [1, -1].forEach(function (sg) { obox([pc[0] + lH[0] * sg * (Rt + 0.06), pc[1] + lH[1] * sg * (Rt + 0.06), 0], tH, lH, [0, 0, 1], [-0.03, 0.03], [-0.03, 0.03], [0, zb + 0.02], COL.leg, { tag: 'support', skipBottom: true }).forEach(push); });
+          obox([pc[0], pc[1], 0], tH, lH, [0, 0, 1], [-0.02, 0.02], [-(Rt + 0.09), Rt + 0.09], [zb - 0.02, zb + 0.02], COL.leg, { tag: 'support' }).forEach(push);
+        }
+        var mid3 = P(Ls / 2, 0, Rt + 0.35);
+        tag(mid3, 'SCREW CONVEYOR (indicative) ' + fmtMm(Ls * 1000) + (d.angle ? ' @ ' + (Math.round(d.angle * 10) / 10) + '°' : ''), 'ind', 'SCREW');
+        dim(P(0, 0, -Rt - 0.1), P(Ls, 0, -Rt - 0.1), 'Screw length ' + fmtMm(Ls * 1000), 'entered', { off: [0, 12] });
+        dim(P(Ls * 0.5, -Rt, 0), P(Ls * 0.5, Rt, 0), 'Dia ' + fmtMm(D * 1000) + (entD ? '' : ' *'), entD ? 'entered' : 'ind', { off: [0, -10] });
+        sc.bulk.push({ seg: segNo, kind: 'screw', from: a3, to: b3, length: Ls, dia: D, pitch: pitch, angle: d.angle, ent: { dia: entD, pitch: entP }, Rt: Rt, hopperLen: hA, A: Av, L: Lh, legs: bLegs, p0: d.p0, p1: d.p1 });
+      } else {
+        var base3 = pts3[d.p0], top3 = pts3[d.p1], H = top3[2] - base3[2], hd = (d.heading || 0) * Math.PI / 180, T = [Math.cos(hd), Math.sin(hd), 0], Lt = [-T[1], T[0], 0], UP = [0, 0, 1];
+        var CW = d.casingW ? d.casingW / 1000 : 0.5, CD = d.casingD ? d.casingD / 1000 : 0.4, pitchB = d.unitPitch ? d.unitPitch / 1000 : 0.3, entW = !!d.casingW, entD2 = !!d.casingD, entPB = !!d.unitPitch;
+        var zIn = base3[2], zTop = top3[2], boot0 = Math.max(0, zIn - 0.35), O = [base3[0], base3[1], 0];
+        var C = function (a, l, z) { return [O[0] + T[0] * a + Lt[0] * l + UP[0] * 0, O[1] + T[1] * a + Lt[1] * l, z]; };
+        // boot (bottom) and head (top) housings are solid; the trunk between is shown see-through so the buckets can be seen
+        obox(O, T, Lt, UP, [-CD / 2 - 0.05, CD / 2 + 0.05], [-CW / 2 - 0.05, CW / 2 + 0.05], [boot0, zIn + 0.3], STEEL, { tag: 'frame' }).forEach(push);
+        obox(O, T, Lt, UP, [-CD / 2 - 0.12, CD / 2 + 0.12], [-CW / 2 - 0.05, CW / 2 + 0.05], [zTop - 0.1, zTop + 0.35], STEEL, { tag: 'frame' }).forEach(push);
+        obox(O, T, Lt, UP, [-CD / 2, CD / 2], [-CW / 2, CW / 2], [zIn + 0.3, zTop - 0.1], [170, 190, 210], { tag: 'frame', a: 0.22 }).forEach(push);
+        [[-CD / 2, -CD / 2 + 0.02], [CD / 2 - 0.02, CD / 2]].forEach(function (rt) { [[-CW / 2, -CW / 2 + 0.02], [CW / 2 - 0.02, CW / 2]].forEach(function (rl) { obox(O, T, Lt, UP, rt, rl, [zIn + 0.3, zTop - 0.1], STEEL, { tag: 'frame' }).forEach(push); }); });   // corner posts
+        // belt / chain strands and buckets
+        [-CD * 0.3, CD * 0.3].forEach(function (a, si) {
+          obox(O, T, Lt, UP, [a - 0.008, a + 0.008], [-CW * 0.38, CW * 0.38], [zIn - 0.2, zTop + 0.1], DARK, { tag: 'drive', a: 1 }).forEach(push);
+          var nb = Math.min(60, Math.max(2, Math.floor((H + 0.3) / pitchB))), kb;
+          for (kb = 0; kb < nb; kb++) { var zb2 = zIn - 0.2 + (kb + (si ? 0.5 : 0)) * pitchB; if (zb2 > zTop + 0.05) break; obox(O, T, Lt, UP, si ? [a - 0.11, a] : [a, a + 0.11], [-CW * 0.38, CW * 0.38], [zb2, zb2 + 0.085], [226, 164, 72], { tag: 'drive' }).forEach(push); }
+        });
+        // head pulley, inlet hopper (feed side, behind), discharge chute (front), drive
+        cylinder({ p: [O[0], O[1], zTop + 0.12], t: T, l: Lt, u: UP }, 0.13, -CW / 2 - 0.08, CW / 2 + 0.08, DARK, { tag: 'drive' }).forEach(push);
+        (function () {   // inlet hopper on the feed side: a funnel leading into the boot
+          var j, lo = [[-0.05, -CW * 0.38], [-0.05, CW * 0.38], [0.0, CW * 0.38], [0.0, -CW * 0.38]], hi = [[-0.45, -CW * 0.7], [-0.45, CW * 0.7], [-0.0, CW * 0.7], [-0.0, -CW * 0.7]];
+          var pl = lo.map(function (v) { return C(-CD / 2 - 0.05 + v[0], v[1], zIn + 0.02); }), ph = hi.map(function (v) { return C(-CD / 2 - 0.05 + v[0], v[1], zIn + 0.32); });
+          for (j = 0; j < 4; j++) { var jn = (j + 1) % 4, qh = [pl[j], pl[jn], ph[jn], ph[j]]; push(poly(qh, norm(cross(sub(qh[1], qh[0]), sub(qh[2], qh[0]))), HOP, { tag: 'frame', two: true })); }
+        })();
+        (function () {   // discharge chute on the front of the head, sloping down and outwards
+          var a0 = CD / 2 + 0.12, j, tp = [[a0, -CW * 0.4, zTop - 0.02], [a0, CW * 0.4, zTop - 0.02], [a0, CW * 0.4, zTop + 0.22], [a0, -CW * 0.4, zTop + 0.22]], bt2 = [[a0 + 0.4, -CW * 0.4, zTop - 0.38], [a0 + 0.4, CW * 0.4, zTop - 0.38], [a0 + 0.4, CW * 0.4, zTop - 0.18], [a0 + 0.4, -CW * 0.4, zTop - 0.18]];
+          var A_ = tp.map(function (v) { return C(v[0], v[1], v[2]); }), B_ = bt2.map(function (v) { return C(v[0], v[1], v[2]); });
+          for (j = 0; j < 4; j++) { var jn = (j + 1) % 4, qh = [A_[j], A_[jn], B_[jn], B_[j]]; push(poly(qh, norm(cross(sub(qh[1], qh[0]), sub(qh[2], qh[0]))), HOP, { tag: 'frame', two: true })); }
+        })();
+        obox([O[0], O[1], 0], T, Lt, UP, [-0.2, 0.2], [CW / 2 + 0.05, CW / 2 + 0.45], [zTop + 0.35, zTop + 0.55], [90, 96, 110], { tag: 'drive' }).forEach(push);   // drive platform / gearbox (placeholder)
+        if (!userMotor) obox(O, T, Lt, UP, [-0.15, 0.15], [CW / 2 + 0.1, CW / 2 + 0.5], [zTop + 0.35, zTop + 0.55], motorC, { tag: 'drive' }).forEach(push);
+        if (boot0 > 0.05) [[-1, -1], [-1, 1], [1, -1], [1, 1]].forEach(function (c) { obox(O, T, Lt, UP, [c[0] * (CD / 2 + 0.02) - 0.03, c[0] * (CD / 2 + 0.02) + 0.03], [c[1] * (CW / 2 + 0.02) - 0.03, c[1] * (CW / 2 + 0.02) + 0.03], [0, boot0], COL.leg, { tag: 'support', skipBottom: true }).forEach(push); });
+        tag([O[0], O[1], zTop + 0.75], 'BUCKET ELEVATOR (indicative) lift ' + fmtMm(H * 1000), 'ind', 'BUCKET');
+        dim([O[0] + T[0] * (CD / 2 + 0.3) + Lt[0] * (CW / 2 + 0.1), O[1] + T[1] * (CD / 2 + 0.3) + Lt[1] * (CW / 2 + 0.1), zIn], [O[0] + T[0] * (CD / 2 + 0.3) + Lt[0] * (CW / 2 + 0.1), O[1] + T[1] * (CD / 2 + 0.3) + Lt[1] * (CW / 2 + 0.1), zTop], 'Lift height ' + fmtMm(H * 1000), 'entered', { off: [-4, 0] });
+        dim(C(-CD / 2, CW / 2 + 0.1, 0), C(CD / 2, CW / 2 + 0.1, 0), 'Casing depth ' + fmtMm(CD * 1000) + (entD2 ? '' : ' *'), entD2 ? 'entered' : 'ind', { off: [0, 12] });
+        dim(C(CD / 2 + 0.05, -CW / 2, 0), C(CD / 2 + 0.05, CW / 2, 0), 'Casing width ' + fmtMm(CW * 1000) + (entW ? '' : ' *'), entW ? 'entered' : 'ind', { off: [0, 12] });
+        sc.bulk.push({ seg: segNo, kind: 'bucket', x: O[0], y: O[1], T: T, L: Lt, lift: H, zIn: zIn, zTop: zTop, W: CW, D: CD, pitch: pitchB, ent: { W: entW, D: entD2, pitch: entPB }, boot0: boot0, p0: d.p0, p1: d.p1, heading: d.heading || 0 });
+      }
+    });
+    if (bulkDet.length) sc.notes.push('Screw conveyor / bucket elevator: drawn for layout only and INDICATIVE. Casing or trough, screw flights, buckets, chain or belt, drive, hopper and chute are placeholders (sizes marked * were not entered). Ultraplast engineering specifies the unit; product movement is not simulated and no capacity is claimed. The bucket elevator casing is shown see-through so the buckets can be seen.');
     if (spiralSeg.length) sc.notes.push('Spiral section: centre column, base plate and radial arms are INDICATIVE placeholders. The belt type for the helix, the column and arm structure, the drive and the guarding are engineered by Ultraplast; nothing is sized here.');
 
     /* ----- hydraulic adjustable stands under incline / decline segments (indicative; sizes are placeholders, never a selection) ----- */
@@ -541,6 +644,8 @@
       grow(lo, hi, [st.p[0], st.p[1], 0]); grow(lo, hi, [st.p[0], st.p[1], st.p[2] + (prodH || 0.1) + 0.2]);
     });
 
+    bulkPolys.forEach(function (q) { q.p.forEach(function (p) { grow(clo, chi, p); grow(lo, hi, p); }); });
+
     /* floor grid fallback + shadows are drawn by the viewer */
     if (hasFloor) sc.grid = gridFor(0, 0, FL, FW);
     else { sc.grid = gridFor(Math.floor(clo[0] - 1), Math.floor(clo[1] - 1), Math.ceil(chi[0] + 1), Math.ceil(chi[1] + 1)); grow(lo, hi, [sc.grid.x0, sc.grid.y0, 0]); grow(lo, hi, [sc.grid.x1, sc.grid.y1, 0]); }
@@ -559,7 +664,9 @@
     details.forEach(function (d, k) {
       var n = k + 1, m = Math.round((d.p0 + d.p1) / 2), pm = pts3[m], txt = 'S' + n;
       if (detail && details.length <= 10) {
-        if (d.type === 'straight') txt += ' Straight ' + fmt(d.length);
+        if (d.bucket) txt += ' Bucket elevator · lift ' + fmtMm(d.length * 1000);
+        else if (d.screw) txt += ' Screw conveyor ' + fmt(d.length) + (d.angle ? ' · ' + Math.round(Math.abs(d.angle) * 10) / 10 + '°' : ' · level');
+        else if (d.type === 'straight') txt += ' Straight ' + fmt(d.length);
         else if (d.spiral) txt += ' Spiral ' + (d.direction === 'right' ? 'right' : 'left') + ' R ' + fmtMm(d.radius * 1000) + ' × ' + (Math.round(d.turns * 100) / 100) + ' turns · rise ' + fmtMm(Math.abs(d.rise) * 1000) + ' · pitch ' + fmtMm(d.pitch * 1000);
         else if (d.type === 'curve') txt += ' Curve ' + (d.direction === 'right' ? 'right' : 'left') + ' R ' + fmtMm(d.radius * 1000) + ' × ' + Math.round(d.angle * 10) / 10 + '° (arc ' + fmt(d.length) + ')';
         else txt += ' Incline ' + fmt(d.length) + ' · rise ' + fmtMm(Math.abs(d.rise) * 1000) + ' · ' + Math.round(Math.abs(d.angle) * 10) / 10 + '°';
@@ -576,11 +683,11 @@
         var sg = d.direction === 'right' ? -1 : 1, cen = [a[0] + sg * d.radius * (-tt[1]), a[1] + sg * d.radius * tt[0], a[2]];
         dim(cen, [pm[0], pm[1], a[2]], 'R ' + fmtMm(d.radius * 1000), 'entered', { dashed: true, off: [0, -8] });
       }
-      if (d.type === 'incline') {
+      if (d.type === 'incline' && !d.bucket) {
         var th = norm([b[0] - a[0], b[1] - a[1], 0]), lh = [-th[1], th[0], 0], o2 = hw + thk + 0.3, zLo = Math.min(a[2], b[2]);
         var pa = [a[0] + lh[0] * o2, a[1] + lh[1] * o2, zLo], pb = [b[0] + lh[0] * o2, b[1] + lh[1] * o2, zLo], pc = [pb[0], pb[1], Math.max(a[2], b[2])];
         dim(pa, pb, 'Run ' + fmt(d.horizontal), 'calc', { dashed: true, off: [0, 12] });
-        dim(pb, pc, 'Rise ' + fmtMm(Math.abs(d.rise) * 1000), 'entered', { off: [6, 0] });
+        dim(pb, pc, 'Rise ' + fmtMm(Math.abs(d.rise) * 1000), d.screw ? 'calc' : 'entered', { off: [6, 0] });
       }
     });
     if (!(sc.floor)) { sc.floorUnknown = true; }
@@ -695,7 +802,7 @@
     var sc = buildScene(opts.scene), desc = describe(opts.scene);
     var vS = opts.speedMPerMin > 0 ? opts.speedMPerMin / 60 : 0, beh = { mu: (opts.behaviour && opts.behaviour.mu) || 0.3, cogRatio: (opts.behaviour && opts.behaviour.cogRatio) || 0.5, margin: (opts.behaviour && opts.behaviour.margin) || 0.8, stopTimeS: (opts.behaviour && opts.behaviour.stopTimeS) || 0.5 }, pitch = opts.pitchMm > 0 ? opts.pitchMm / 1000 : 0, lanes = Math.max(1, opts.lanes || 1);
     var prod = opts.scene.prod, along = prod && pos(prod.alongMm) ? prod.alongMm / 1000 : 0, across = prod && pos(prod.acrossMm) ? prod.acrossMm / 1000 : 0, ph = prod && pos(prod.heightMm) ? prod.heightMm / 1000 : 0;
-    var canRun = !sc.empty && pitch > 0 && along > 0 && across > 0 && ph > 0 && !!sc.track && sc.track.length > 0 && !!PH;
+    var canRun = !sc.empty && pitch > 0 && along > 0 && across > 0 && ph > 0 && !!sc.track && sc.track.length > 0 && !!PH && !sc.noSim;
     var prodRgb = opts.productRgb || null, shadeA = prodRgb || COL.prodA, shadeB = prodRgb ? prodRgb.map(function (c) { return Math.round(c * 0.88); }) : COL.prodB;
     var bl = sc.beltRgb ? 0.299 * sc.beltRgb[0] + 0.587 * sc.beltRgb[1] + 0.114 * sc.beltRgb[2] : 60, slatCol = bl > 140 ? 'rgba(0,0,0,.28)' : 'rgba(255,255,255,.22)';
     var fmt = opts.scene.fmt || function (m) { return m.toFixed(2) + ' m'; };

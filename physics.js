@@ -48,6 +48,7 @@
     var lanes = Math.max(1, p.lanes || 1), laneOff = lanes > 1 ? W / 2 - (W / lanes) / 2 : 0;
     (o.details || []).forEach(function (d, i) {
       var sS = o.track.cum[d.p0], sE = o.track.cum[d.p1], name = 'S' + (i + 1);
+      if (d.screw || d.bucket) { checks.push({ id: 'bulk' + i, label: name + (d.bucket ? ' bucket elevator' : ' screw conveyor'), status: 'info', text: 'Not a belt: the product-on-belt checks (friction, slope, tipping) do not apply. Material flow, capacity and speed need engineering review.' }); return; }
       if (d.type === 'curve' && pos(d.radius)) {
         var Reff = Math.max(0.05, d.radius - laneOff), vs = Math.sqrt(mu * G * Reff), vt = Math.sqrt(G * Reff * p.across / (2 * h)), vc = Math.min(vs, vt), mode = vs <= vt ? 'slide' : 'tip', ratio = v / vc, st = status(ratio, margin);
         capSpeed(vc, name + ' curve');

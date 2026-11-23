@@ -56,7 +56,7 @@
   /* Drive and sensors the customer places on the conveyor (all optional; sizes left blank are drawn as INDICATIVE placeholders). */
   var EQUIP_TYPES = { motor: 'Drive motor', photoeye: 'Photo-eye sensor', proximity: 'Proximity sensor', limit: 'Limit switch', encoder: 'Encoder', camera: 'Camera / vision', panel: 'Control panel / junction box', other: 'Other equipment' };
   var EQUIP_KINDS = { posMm: 'mm', mountMm: 'mm', lenMm: 'mm', widMm: 'mm', bodyHMm: 'mm' };
-  var SEGMENT_KINDS = { length: 'm', angle: 'deg', radius: 'mm', horizontal: 'm', rise: 'mm', inclineAngle: 'deg', hydStroke: 'mm', hydBaseL: 'mm', hydBaseW: 'mm', hydCastorH: 'mm' };
+  var SEGMENT_KINDS = { length: 'm', angle: 'deg', radius: 'mm', horizontal: 'm', rise: 'mm', inclineAngle: 'deg', hydStroke: 'mm', hydBaseL: 'mm', hydBaseW: 'mm', hydCastorH: 'mm', unitDia: 'mm', unitPitch: 'mm', casingW: 'mm', casingD: 'mm' };
 
   function parseNum(v) {
     if (v === null || v === undefined) return null;
@@ -256,6 +256,14 @@
         if (s.radius !== null && !isNaN(s.radius) && s.radius <= 0) err('segment' + i, tag + 'spiral radius must be greater than zero.', 4);
         if (s.rise !== null && !isNaN(s.rise) && s.rise === 0) err('segment' + i, tag + 'a spiral needs a rise (use a curve for a flat turn).', 4);
       }
+      if (s.type === 'screw' || s.type === 'bucket') {
+        var nm2 = s.type === 'screw' ? 'screw conveyor' : 'bucket elevator';
+        ['unitDia', 'unitPitch', 'casingW', 'casingD'].forEach(function (p) { if (s[p] !== null && s[p] !== undefined && (isNaN(s[p]) || s[p] <= 0)) err('segment' + i, tag + 'each optional ' + nm2 + ' size must be a number greater than zero (or leave it blank).', 4); });
+        if (s.type === 'screw') {
+          if (s.length !== null && !isNaN(s.length) && s.length <= 0) err('segment' + i, tag + 'screw length must be greater than zero.', 4);
+          if (s.inclineAngle !== null && !isNaN(s.inclineAngle) && Math.abs(s.inclineAngle) >= 90) err('segment' + i, tag + 'screw angle must be between -90 and +90 degrees (exclusive).', 4);
+        } else if (s.rise !== null && !isNaN(s.rise) && s.rise <= 0) err('segment' + i, tag + 'a bucket elevator lifts product: the lift height must be greater than zero.', 4);
+      }
       if (s.type === 'incline') {
         if (s.horizontal !== null && !isNaN(s.horizontal) && s.horizontal <= 0) err('segment' + i, tag + 'horizontal run must be greater than zero.', 4);
         if (s.inclineAngle !== null && !isNaN(s.inclineAngle) && Math.abs(s.inclineAngle) >= 90) err('segment' + i, tag + 'incline angle must be between -90 and +90 degrees (exclusive).', 4);
@@ -284,6 +292,8 @@
     if (s.type === 'straight') return ok(s.length) && s.length > 0;
     if (s.type === 'curve') return ok(s.angle) && s.angle > 0 && ok(s.radiusM) && s.radiusM > 0;
     if (s.type === 'spiral') return ok(s.angle) && s.angle > 0 && ok(s.radiusM) && s.radiusM > 0 && ok(s.riseM) && s.riseM !== 0;
+    if (s.type === 'screw') return ok(s.length) && s.length > 0;
+    if (s.type === 'bucket') return ok(s.riseM) && s.riseM > 0;
     if (s.type === 'incline') {
       var hasH = ok(s.horizontal) && s.horizontal > 0, hasZ = ok(s.riseM), hasA = ok(s.inclineAngle);
       return (hasH && (hasZ || hasA)) || (hasZ && hasA && s.inclineAngle !== 0);
@@ -345,6 +355,24 @@
         d.rise = riseS; d.turns = s.angle / 360; d.pitch = riseS / (s.angle / 360); d.slopeDeg = Math.atan2(Math.abs(riseS), arcS) * 180 / Math.PI * (riseS < 0 ? -1 : 1);
         d.centre = { x: cxS, y: cyS };
         minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+      } else if (s.type === 'screw') {                           // screw conveyor: a straight trough, level or sloped
+        var aS = s.inclineAngle !== null && s.inclineAngle !== undefined && !isNaN(s.inclineAngle) ? s.inclineAngle : 0, Ls = s.length, Hs = Ls * Math.cos(deg2rad(aS)), zs = Ls * Math.sin(deg2rad(aS));
+        var nsS = Math.max(1, Math.ceil(Hs / STEP));
+        for (var mS = 1; mS <= nsS; mS++) { var ttS = mS / nsS; pts.push({ x: x + Hs * ttS * Math.cos(hr), y: y + Hs * ttS * Math.sin(hr), z: z + zs * ttS }); }
+        x += Hs * Math.cos(hr); y += Hs * Math.sin(hr); z += zs;
+        if (Math.abs(zs) < 1e-9) { L.straight += Ls; } else { L.inclined += Ls; }
+        L.total += Ls; L.horizontal += Hs;
+        d.type = Math.abs(zs) < 1e-9 ? 'straight' : 'incline'; d.screw = true; d.length = Ls; d.horizontal = Hs; d.rise = zs; d.angle = aS;
+        d.unitDia = s.unitDia !== null && s.unitDia !== undefined && !isNaN(s.unitDia) ? s.unitDia : null; d.unitPitch = s.unitPitch !== null && s.unitPitch !== undefined && !isNaN(s.unitPitch) ? s.unitPitch : null;
+        minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
+      } else if (s.type === 'bucket') {                          // bucket elevator: a vertical lift at one plan position
+        var Hb = s.riseM, nsB = Math.max(1, Math.ceil(Hb / STEP));
+        for (var mB = 1; mB <= nsB; mB++) pts.push({ x: x, y: y, z: z + Hb * mB / nsB });
+        z += Hb; L.inclined += Hb; L.total += Hb;
+        d.type = 'incline'; d.bucket = true; d.length = Hb; d.horizontal = 0; d.rise = Hb; d.angle = 90;
+        ['unitPitch', 'casingW', 'casingD'].forEach(function (k) { d[k] = s[k] !== null && s[k] !== undefined && !isNaN(s[k]) ? s[k] : null; });
+        d.heading = h;
+        minZ = Math.min(minZ, z); maxZ = Math.max(maxZ, z);
       } else {                                                   // incline F4
         var H, rise;
         var hasH = s.horizontal !== null && !isNaN(s.horizontal) && s.horizontal > 0;
@@ -395,6 +423,8 @@
 
     if (layout === 'multi') {
       primary = 'custom'; reasons.push('A multi-conveyor production line needs coordinated transfers, speeds and controls, so it is treated as a custom / integrated line.');
+    } else if (geo.hasBulk) {
+      primary = 'custom'; reasons.push('A ' + geo.hasBulk + ' is not an Ultraplast belt or chain conveyor, so the planner draws it for layout only. Casing or trough, screw or buckets, drive, speed, capacity and guarding are for Ultraplast engineering to specify.'); alts = ['inclined'];
     } else if (geo.hasSpiral) {
       primary = 'custom'; reasons.push('A spiral conveyor (a helical track that climbs or descends around a centre line) is a custom-engineered conveyor. The planner calculates the geometry only; belt or chain type, frame, centre column, drive and guards are for Ultraplast engineering to specify.'); alts = ['side_flex', 'inclined'];
     } else if (hasCurve && hasIncline) {
@@ -468,7 +498,9 @@
     /* --- path --- */
     var segs = segmentsFromInputs(inp);
     var geo = { hasCurve: false, hasIncline: false, hasSpiral: false };
-    segs.forEach(function (s) { if (s.type === 'curve') geo.hasCurve = true; if (s.type === 'incline') geo.hasIncline = true; if (s.type === 'spiral') { geo.hasSpiral = geo.hasCurve = geo.hasIncline = true; } });
+    segs.forEach(function (s) { if (s.type === 'curve') geo.hasCurve = true; if (s.type === 'incline') geo.hasIncline = true; if (s.type === 'screw') { geo.hasBulk = geo.hasBulk || 'screw conveyor'; if (s.inclineAngle) geo.hasIncline = true; } if (s.type === 'bucket') { geo.hasBulk = 'bucket elevator'; geo.hasIncline = true; } if (s.type === 'spiral') { geo.hasSpiral = geo.hasCurve = geo.hasIncline = true; } });
+    if (inp.layout === 'screw') geo.hasBulk = geo.hasBulk || 'screw conveyor';
+    if (inp.layout === 'bucket') { geo.hasBulk = 'bucket elevator'; geo.hasIncline = true; }
     if (inp.layout === 'spiral') { geo.hasSpiral = geo.hasCurve = geo.hasIncline = true; }
     if (['L', 'U', 'S', 'curved'].indexOf(inp.layout) >= 0) geo.hasCurve = true;
     if (inp.layout === 'inclined') geo.hasIncline = true;
@@ -536,11 +568,22 @@
         issue('info', nm + 'centre-line radius ' + round(sp.radiusMm, 0) + ' mm, ' + round(sp.turns, 2) + ' turn(s), ' + (sp.descending ? 'descending ' : 'rising ') + round(Math.abs(sp.riseMm), 0) + ' mm, slope about ' + round(Math.abs(sp.slopeDeg), 1) + ' deg on the centre line. The maximum slope for your belt surface and product, the belt or chain type and the frame need engineering review.');
         if (sp.widthMm === null) out.missing.push('Conveyor width (spiral inner / outer radius and footprint need it, segment ' + sp.seg + ')');
       });
+      out.bulk = path.details.filter(function (d) { return d.screw || d.bucket; }).map(function (d) {
+        return d.bucket ? { seg: d.index + 1, kind: 'bucket', liftMm: d.length * 1000, casingWMm: d.casingW, casingDMm: d.casingD, pitchMm: d.unitPitch }
+          : { seg: d.index + 1, kind: 'screw', lengthMm: d.length * 1000, angleDeg: d.angle, diaMm: d.unitDia, pitchMm: d.unitPitch, horizontalMm: d.horizontal * 1000, riseMm: d.rise * 1000 };
+      });
+      out.bulk.forEach(function (b) {
+        var nm = 'Segment ' + b.seg + ' (' + (b.kind === 'bucket' ? 'bucket elevator' : 'screw conveyor') + '): ';
+        issue('info', nm + (b.kind === 'bucket' ? 'lift height ' + round(b.liftMm, 0) + ' mm. ' : 'screw length ' + round(b.lengthMm, 0) + ' mm' + (b.angleDeg ? ' at ' + round(b.angleDeg, 1) + ' deg' : ', level') + '. ') + 'This planner draws it for layout only. It does not size the ' + (b.kind === 'bucket' ? 'casing, chain or belt, buckets, head and boot shafts' : 'screw, shaft, trough and hangers') + ', the drive, the speed or the capacity: engineering review required.');
+        if (b.kind === 'screw' && b.diaMm === null) out.missing.push('Screw diameter (segment ' + b.seg + ', placeholder drawn)');
+        if (b.kind === 'bucket' && (b.casingWMm === null || b.casingDMm === null)) out.missing.push('Casing width and depth (segment ' + b.seg + ', placeholder drawn)');
+        out.missing.push('Bulk material details for segment ' + b.seg + ' (material, bulk density, particle size, required capacity)');
+      });
       path.details.forEach(function (d) { if (d.inconsistent) issue('warning', 'Segment ' + (d.index + 1) + ': entered rise and angle disagree by more than 1 degree; the rise was used.'); });
       if (inp.layout === 'multi') issue('info', 'Multi-conveyor layout: only the single chained route you entered is calculated. Parallel lines, merges and transfers need engineering review.');
       if (inp.layout === 'custom') issue('info', 'Custom layout: path length is calculated from the segments you entered; anything else needs engineering review.');
     } else {
-      out.path = null; out.hydraulic = []; out.spiral = [];
+      out.path = null; out.hydraulic = []; out.spiral = []; out.bulk = [];
       out.missing.push(inp.layout === 'straight' || !inp.layout ? 'Total route length (straight conveyor)' : 'Route segments (lengths, curve angles/radii, incline data)');
     }
 
@@ -773,6 +816,7 @@
     if (out.path) {
       var cur = out.path.details.filter(function (d) { return d.type === 'curve'; });
       if (cur.length) add('Curve sections', cur.length, 'curve(s)', cur.map(function (c) { return round(c.angle, 0) + ' deg @ R ' + round(c.radius * 1000, 0) + ' mm'; }).join('; '), STATUS.CALC);
+      (out.bulk || []).forEach(function (b) { add((b.kind === 'bucket' ? 'Bucket elevator' : 'Screw conveyor') + ' (segment ' + b.seg + ')', b.kind === 'bucket' ? round(b.liftMm, 0) : round(b.lengthMm, 0), 'mm', (b.kind === 'bucket' ? 'Lift height' + (b.casingWMm ? ', casing ' + round(b.casingWMm, 0) + ' x ' + round(b.casingDMm || 0, 0) + ' mm' : '') : 'Screw length' + (b.diaMm ? ', diameter ' + round(b.diaMm, 0) + ' mm' : '') + (b.angleDeg ? ', ' + round(b.angleDeg, 1) + ' deg' : ', level')) + '. Custom item: casing / trough, screw or buckets, drive and capacity to be engineered.', STATUS.REVIEW); });
       (out.spiral || []).forEach(function (sp) { add('Spiral section (segment ' + sp.seg + ')', round(sp.turns, 2), 'turn(s)', 'Centre-line radius ' + round(sp.radiusMm, 0) + ' mm, ' + (sp.descending ? 'descends ' : 'rises ') + round(Math.abs(sp.riseMm), 0) + ' mm (' + round(sp.pitchMm, 0) + ' mm per turn), track length ' + round(sp.centreLineM, 2) + ' m. Belt / chain type, centre column, frame, drive and guards: to be engineered.', STATUS.CALC); });
       var inc = out.path.details.filter(function (d) { return d.type === 'incline'; });
       if (inc.length) add('Incline / decline sections', inc.length, 'section(s)', inc.map(function (c) { return round(c.angle, 1) + ' deg over ' + round(c.horizontal, 2) + ' m run'; }).join('; ') + '. Cleats / surface profile to be confirmed.', STATUS.CALC);

@@ -93,6 +93,73 @@
     }
   }
 
+  /* ----- screw conveyors and bucket elevators: plan footprint, side view, run-splitting of the belt lines ----- */
+  function bulkRunsPoly(V, pts, layer, sts, bulkR) {
+    if (!bulkR.length) { V.poly(pts, false, layer); return; }
+    var run = [], k;
+    for (k = 0; k < pts.length - 1; k++) {
+      var m = (sts[k].s + sts[k + 1].s) / 2;
+      if (bulkR.some(function (r) { return m >= r[0] - 1e-9 && m <= r[1] + 1e-9; })) { if (run.length > 1) V.poly(run, false, layer); run = []; continue; }
+      if (!run.length) run.push(pts[k]); run.push(pts[k + 1]);
+    }
+    if (run.length > 1) V.poly(run, false, layer);
+  }
+  function bulkPlan(V, b, o) {
+    o = o || {}; var tx = o.tH || 100;
+    if (b.kind === 'screw') {
+      var hxy = Math.hypot(b.to[0] - b.from[0], b.to[1] - b.from[1]), th = hxy > 1e-9 ? [(b.to[0] - b.from[0]) / hxy, (b.to[1] - b.from[1]) / hxy] : [1, 0], lh = [-th[1], th[0]], o2 = [b.from[0], b.from[1]], Rt = b.Rt, Rf = b.dia / 2, ca = Math.cos(b.angle * Math.PI / 180) || 1;
+      V.poly(rect(o2, th, lh, 0, hxy, -Rt, Rt), true, 'OUTLINE'); V.poly(rect(o2, th, lh, 0, hxy, -Rf, Rf), true, 'FRAME_IND');
+      var ph = Math.max(0.02, b.pitch * ca), a, n = 0, pp = function (x, y) { return [(o2[0] + th[0] * x + lh[0] * y) * MM, (o2[1] + th[1] * x + lh[1] * y) * MM]; };
+      for (a = 0; a < hxy - 1e-6 && n < 80; a += ph, n++) V.line(pp(a, -Rf), pp(Math.min(hxy, a + ph / 2), Rf), 'DRIVE_IND');
+      V.line(pp(-0.05, 0), pp(hxy + 0.05, 0), 'CENTRE');
+      V.poly(rect(o2, th, lh, 0.02, 0.02 + Math.min(b.hopperLen, hxy * 0.6), -Rt * 1.5, Rt * 1.5), true, 'SUPPORT_IND');   // inlet hopper
+      V.poly(rect(o2, th, lh, hxy + 0.03, hxy + 0.25, -0.11, 0.11), true, 'DRIVE_IND');   // gearbox / drive (placeholder)
+      V.text(pp(hxy / 2, Rt + 0.25), 'SCREW CONVEYOR (indicative) dia ' + mmTxt(b.dia) + (b.ent.dia ? '' : ' *'), tx * 0.8, b.ent.dia ? 'DIM_ENTERED' : 'DIM_IND', { mid: true });
+    } else {
+      var c = [b.x, b.y], T = b.T, Lt = b.L, W = b.W, D = b.D;
+      V.poly(rect(c, T, Lt, -D / 2, D / 2, -W / 2, W / 2), true, 'OUTLINE'); V.poly(rect(c, T, Lt, -D / 2 - 0.12, D / 2 + 0.12, -W / 2 - 0.05, W / 2 + 0.05), true, 'FRAME_IND');
+      V.poly(rect(c, T, Lt, -D / 2 - 0.5, -D / 2 - 0.05, -W * 0.7, W * 0.7), true, 'SUPPORT_IND');   // inlet hopper (feed side)
+      V.poly(rect(c, T, Lt, D / 2 + 0.12, D / 2 + 0.52, -W * 0.4, W * 0.4), true, 'SUPPORT_IND');    // discharge chute
+      V.poly(rect(c, T, Lt, -0.2, 0.2, W / 2 + 0.05, W / 2 + 0.45), true, 'DRIVE_IND');             // drive platform (placeholder)
+      V.line([(c[0] - T[0] * D / 2) * MM, (c[1] - T[1] * D / 2) * MM], [(c[0] + T[0] * D / 2) * MM, (c[1] + T[1] * D / 2) * MM], 'CENTRE');
+      V.text([(c[0] + Lt[0] * (W / 2 + 0.6)) * MM, (c[1] + Lt[1] * (W / 2 + 0.6)) * MM], 'BUCKET ELEVATOR (indicative) lift ' + mmTxt(b.lift), tx * 0.8, 'DIM_ENTERED', { mid: true });
+      if (o.dims) {
+        var pt2 = function (a, l) { return [(c[0] + T[0] * a + Lt[0] * l) * MM, (c[1] + T[1] * a + Lt[1] * l) * MM]; };
+        V.dim(pt2(-D / 2, -W / 2), pt2(D / 2, -W / 2), 300, 'Casing depth ' + mmTxt(D) + (b.ent.D ? '' : ' *'), b.ent.D ? 'entered' : 'ind');
+        V.dim(pt2(D / 2, -W / 2), pt2(D / 2, W / 2), 300, 'Casing width ' + mmTxt(W) + (b.ent.W ? '' : ' *'), b.ent.W ? 'entered' : 'ind');
+      }
+    }
+  }
+  function bulkSide(E, b, sh, sc) {
+    var cum = sc.track.cum;
+    if (b.kind === 'screw') {
+      var x0 = sh.at(cum[b.p0]) * MM, x1 = sh.at(cum[b.p1]) * MM, z0 = b.from[2] * MM, z1 = b.to[2] * MM, L = Math.hypot(x1 - x0, z1 - z0), ux = (x1 - x0) / L, uz = (z1 - z0) / L, nx = -uz, nz = ux, Rt = b.Rt * MM, Rf = b.dia / 2 * MM;
+      var Q = function (a, n) { return [x0 + ux * a + nx * n, z0 + uz * a + nz * n]; };
+      E.poly([Q(0, Rt), Q(L, Rt), Q(L, -Rt), Q(0, -Rt)], true, 'OUTLINE'); E.poly([Q(0, Rf), Q(L, Rf), Q(L, -Rf), Q(0, -Rf)], true, 'FRAME_IND'); E.line(Q(-80, 0), Q(L + 80, 0), 'CENTRE');
+      var pt = Math.max(30, b.pitch * MM), a, n = 0; for (a = 0; a < L - 1 && n < 80; a += pt, n++) E.line(Q(a, -Rf), Q(Math.min(L, a + pt / 2), Rf), 'DRIVE_IND');
+      var hl = Math.min(b.hopperLen * MM, L * 0.6); E.poly([Q(30, Rt), Q(2 * Rt + 30, Rt), Q(hl, Rt + 350), Q(0, Rt + 350)], true, 'SUPPORT_IND');                  // inlet hopper
+      E.poly([Q(L - 250, -Rt), Q(L, -Rt), Q(L - 30, -Rt - 300), Q(L - 220, -Rt - 300)], true, 'SUPPORT_IND');                                                      // discharge spout
+      E.poly([Q(L + 30, 110), Q(L + 250, 110), Q(L + 250, -110), Q(L + 30, -110)], true, 'DRIVE_IND');                                                             // drive (placeholder)
+      (b.legs || []).forEach(function (g) { var gx = x0 + ux * g.a * MM; E.poly([[gx - 30, 0], [gx + 30, 0], [gx + 30, g.zb * MM], [gx - 30, g.zb * MM]], true, 'SUPPORT_IND'); });
+      E.dim(Q(0, -Rt), Q(L, -Rt), -380, 'Screw length ' + mmTxt(b.length) + (b.angle ? ' @ ' + (Math.round(b.angle * 10) / 10) + ' deg' : ' (level)'), 'entered');
+      E.dim(Q(L * 0.5, -Rf), Q(L * 0.5, Rf), 260, 'Dia ' + mmTxt(b.dia) + (b.ent.dia ? '' : ' *'), b.ent.dia ? 'entered' : 'ind');
+      E.text(Q(L / 2, Rt + 420), 'S' + b.seg + ' SCREW CONVEYOR (indicative)', 0, 'DIM_IND', { rel: true, mid: true });
+    } else {
+      var xm = sh.at(cum[b.p0]) * MM, D = b.D * MM, zb = b.boot0 * MM, zi = b.zIn * MM, zt = b.zTop * MM, top = zt + 350, bx = function (xa, xb, za, zc, layer) { E.poly([[xm + xa, za], [xm + xb, za], [xm + xb, zc], [xm + xa, zc]], true, layer); };
+      bx(-D / 2 - 50, D / 2 + 50, zb, zi + 300, 'OUTLINE'); bx(-D / 2, D / 2, zi + 300, zt - 100, 'OUTLINE'); bx(-D / 2 - 120, D / 2 + 120, zt - 100, top, 'OUTLINE');   // boot, trunk, head
+      [-0.3, 0.3].forEach(function (f) { E.line([xm + D * f, zi - 200], [xm + D * f, zt + 100], 'DRIVE_IND'); });
+      var pit = Math.max(60, b.pitch * MM), zz, nb = 0; for (zz = zi - 200; zz < zt && nb < 70; zz += pit, nb++) { bx(-D * 0.3 - 110, -D * 0.3, zz, zz + 85, 'DRIVE_IND'); bx(D * 0.3, D * 0.3 + 110, zz + pit / 2 < zt ? zz + pit / 2 : zz, (zz + pit / 2 < zt ? zz + pit / 2 : zz) + 85, 'DRIVE_IND'); }
+      E.circle([xm, zt + 120], 130, 'DRIVE_IND');
+      E.poly([[xm - D / 2 - 50, zi + 20], [xm - D / 2 - 450, zi + 320], [xm - D / 2 - 450, zi + 20 + 300 + 20], [xm - D / 2 - 50, zi + 300]], true, 'SUPPORT_IND');                        // inlet hopper
+      E.poly([[xm + D / 2 + 120, zt - 20], [xm + D / 2 + 520, zt - 380], [xm + D / 2 + 520, zt - 180], [xm + D / 2 + 120, zt + 220]], true, 'SUPPORT_IND');                          // discharge chute
+      bx(-200, 200, top, top + 200, 'DRIVE_IND');
+      if (zb > 50) [-1, 1].forEach(function (sg) { var lx = sg * (D / 2 + 20); E.poly([[xm + lx - 30, 0], [xm + lx + 30, 0], [xm + lx + 30, zb], [xm + lx - 30, zb]], true, 'SUPPORT_IND'); });
+      E.dim([xm + D / 2 + 700, zi], [xm + D / 2 + 700, zt], -150, 'Lift height ' + mmTxt(b.lift), 'entered');
+      E.dim([xm - D / 2, zb - 150], [xm + D / 2, zb - 150], -150, 'Casing depth ' + mmTxt(b.D) + (b.ent.D ? '' : ' *'), b.ent.D ? 'entered' : 'ind');
+      E.text([xm, top + 330], 'S' + b.seg + ' BUCKET ELEVATOR (indicative)', 0, 'DIM_IND', { rel: true, mid: true });
+    }
+  }
+
   /* ===================================================== build */
   function build(inp, meta) {
     meta = meta || {};
@@ -105,10 +172,12 @@
 
     /* ---------- PLAN ---------- */
     var P = new View('plan', 'PLAN VIEW'), i;
+    var bulkR = details.filter(function (d) { return d.screw || d.bucket; }).map(function (d) { return [sc.track.cum[d.p0], sc.track.cum[d.p1]]; });
     var L1 = offsetPts(sts, hw), R1 = offsetPts(sts, -hw), L2 = offsetPts(sts, hw + thk), R2 = offsetPts(sts, -hw - thk);
-    P.poly(L1, false, 'OUTLINE'); P.poly(R1, false, 'OUTLINE');
+    bulkRunsPoly(P, L1, 'OUTLINE', sts, bulkR); bulkRunsPoly(P, R1, 'OUTLINE', sts, bulkR);
     P.line(L1[0], R1[0], 'OUTLINE'); P.line(L1[L1.length - 1], R1[R1.length - 1], 'OUTLINE');
-    P.poly(L2, false, 'FRAME_IND'); P.poly(R2, false, 'FRAME_IND');
+    bulkRunsPoly(P, L2, 'FRAME_IND', sts, bulkR); bulkRunsPoly(P, R2, 'FRAME_IND', sts, bulkR);
+    (sc.bulk || []).forEach(function (b) { bulkPlan(P, b, { dims: true, tH: 120 }); });
     P.poly(sts.map(function (s) { return [s.p[0] * MM, s.p[1] * MM]; }), false, 'CENTRE');
     sc.legs.forEach(function (g) { [1, -1].forEach(function (sg) { var c = [g.x + g.l[0] * g.off * sg, g.y + g.l[1] * g.off * sg]; P.poly(rect(c, g.t, g.l, -g.sec, g.sec, -g.sec, g.sec), true, 'SUPPORT_IND'); }); });
     [fS, fE].forEach(function (f) { P.poly(rect(f.p, f.t, f.l, -sc.rollerR, sc.rollerR, -hw - 0.01, hw + 0.01), true, 'DRIVE_IND'); });
@@ -158,7 +227,9 @@
       // plan points for segment end-points (centre-line)
       var qa = tr.at(sS), qb = tr.at(sE), A = [qa.x * MM, qa.y * MM], B = [qb.x * MM, qb.y * MM];
       var label = 'S' + (k + 1) + ' ';
-      if (d.type === 'straight') { P.dim(A, B, 480 + (k % 3) * 300, label + 'Straight ' + mmTxt(d.length), 'calc'); }
+      if (d.bucket) { P.text([A[0], A[1] - 380 - (k % 3) * 200], label + 'Bucket elevator, lift ' + mmTxt(d.length) + ' (entered)', 0, 'DIM_ENTERED', { rel: true, mid: true }); }
+      else if (d.screw) { P.dim(A, B, 480 + (k % 3) * 300, label + 'Screw conveyor ' + mmTxt(d.length) + (d.angle ? ' / ' + ang(Math.abs(d.angle)) + ' (plan run ' + mmTxt(d.horizontal) + ')' : ''), 'calc'); }
+      else if (d.type === 'straight') { P.dim(A, B, 480 + (k % 3) * 300, label + 'Straight ' + mmTxt(d.length), 'calc'); }
       else if (d.spiral && d.centre) {
         var cs = [d.centre.x * MM, d.centre.y * MM], rin = Math.max(0, d.radius - hw - thk) * MM, rout = (d.radius + hw + thk) * MM, mS = tr.at((sS + sE) / 2);
         P.circle(cs, d.radius * MM, 'CENTRE'); P.circle(cs, rin, 'OUTLINE'); P.circle(cs, rout, 'OUTLINE');
@@ -181,7 +252,7 @@
       FV.poly([[0, 0], [fx, 0], [fx, fy], [0, fy]], true, 'FLOOR');
       FV.dim([0, 0], [fx, 0], -dd0, 'Floor length ' + mmTxt(sc.floor.x1), 'entered'); FV.dim([fx, 0], [fx, fy], -dd0, 'Floor width ' + mmTxt(sc.floor.y1), 'entered');
       sc.obstacles.forEach(function (b) { FV.poly([[b.x * MM, b.y * MM], [(b.x + b.w) * MM, b.y * MM], [(b.x + b.w) * MM, (b.y + b.d) * MM], [b.x * MM, (b.y + b.d) * MM]], true, 'OBSTACLE'); FV.text([(b.x + b.w / 2) * MM, (b.y + b.d / 2) * MM], b.name + ' ' + mmTxt(b.w) + ' x ' + mmTxt(b.d), 0, 'OBSTACLE', { mid: true, rel: true }); });
-      FV.poly(L1, false, 'OUTLINE'); FV.poly(R1, false, 'OUTLINE'); FV.line(L1[0], R1[0], 'OUTLINE'); FV.line(L1[L1.length - 1], R1[R1.length - 1], 'OUTLINE');
+      bulkRunsPoly(FV, L1, 'OUTLINE', sts, bulkR); bulkRunsPoly(FV, R1, 'OUTLINE', sts, bulkR); (sc.bulk || []).forEach(function (b) { bulkPlan(FV, b, { tH: 200 }); }); FV.line(L1[0], R1[0], 'OUTLINE'); FV.line(L1[L1.length - 1], R1[R1.length - 1], 'OUTLINE');
       FV.poly(sts.map(function (st) { return [st.p[0] * MM, st.p[1] * MM]; }), false, 'CENTRE');
       FV.text([fS.p[0] * MM, fS.p[1] * MM], 'IN', 0, 'TITLE', { rel: true }); FV.text([fE.p[0] * MM, fE.p[1] * MM], 'OUT', 0, 'TITLE', { rel: true });
       if (sc.truck) truckPlan(FV, sc.truck, { tH: 200 });
@@ -191,9 +262,10 @@
     var sh = shMap(sts), E = new View('side', 'SIDE ELEVATION (developed along route)'), fd = sc.fd, top = sts.map(function (s, k) { return [sh.cum[k] * MM, s.p[2] * MM]; });
     var totalH = sh.cum[sh.cum.length - 1] * MM;
     E.line([-300, 0], [totalH + 300, 0], 'FLOOR');
-    E.poly(top, false, 'OUTLINE'); E.poly(top.map(function (p) { return [p[0], p[1] - 12]; }), false, 'OUTLINE');
-    E.poly(top.map(function (p) { return [p[0], p[1] - fd * MM]; }), false, 'FRAME_IND');
-    if (sc.guideOn !== false) E.poly(top.map(function (p) { return [p[0], p[1] + 15 + sc.guideH * MM]; }), false, 'GUIDE_IND');
+    bulkRunsPoly(E, top, 'OUTLINE', sts, bulkR); bulkRunsPoly(E, top.map(function (p) { return [p[0], p[1] - 12]; }), 'OUTLINE', sts, bulkR);
+    bulkRunsPoly(E, top.map(function (p) { return [p[0], p[1] - fd * MM]; }), 'FRAME_IND', sts, bulkR);
+    if (sc.guideOn !== false) bulkRunsPoly(E, top.map(function (p) { return [p[0], p[1] + 15 + sc.guideH * MM]; }), 'GUIDE_IND', sts, bulkR);
+    (sc.bulk || []).forEach(function (b) { bulkSide(E, b, sh, sc); });
     (sc.spirals || []).forEach(function (q) { var d0 = M.inp.path.details[q.seg - 1], xm = sh.at((sc.track.cum[d0.p0] + sc.track.cum[d0.p1]) / 2) * MM, cw = q.colR * MM; E.poly([[xm - cw, 0], [xm + cw, 0], [xm + cw, q.colTop * MM], [xm - cw, q.colTop * MM]], true, 'SUPPORT_IND'); E.text([xm, q.colTop * MM + 120], 'S' + q.seg + ' spiral centre column (IND) - helix developed along the route', 0, 'DIM_IND', { rel: true, mid: true }); });
     sc.legs.forEach(function (g) { var x = sh.at(g.s) * MM, s = g.sec * MM; E.poly([[x - s, 0], [x + s, 0], [x + s, g.zb * MM], [x - s, g.zb * MM]], true, 'SUPPORT_IND'); });
     (sc.hyd || []).forEach(function (h, i) {   // hydraulic stands (side)
@@ -262,7 +334,8 @@
     details.forEach(function (d, k) {
       var x1 = xa + d.horizontal * MM, za = sts[0].p[2] * MM; var iz = (function () { var s0 = 0; for (var q = 0; q < k; q++) s0 += details[q].length; return [sc.track.at(s0).z * MM, sc.track.at(s0 + d.length).z * MM]; })();
       E.line([xa, iz[0] - fd * MM - 120], [xa, dimY + 100], 'CENTRE');
-      E.dim([xa, dimY - 150], [x1, dimY - 150], 150 + (k % 2) * 330, 'S' + (k + 1) + ' ' + (d.type === 'incline' ? 'incline run ' + mmTxt(d.horizontal) + ' | slope ' + mmTxt(Math.hypot(d.horizontal, d.rise)) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | ' + ang(Math.abs(d.angle)) : d.spiral ? 'spiral ' + mmTxt(d.length) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | slope ' + ang(Math.abs(d.slopeDeg)) : d.type + ' ' + mmTxt(d.length)), 'calc');
+      if (d.bucket) { E.text([xa, dimY - 150 + 80], 'S' + (k + 1) + ' bucket elevator lift ' + Math.round(d.length * MM) + ' mm (vertical)', 0, 'DIM_ENTERED', { rel: true, mid: true }); xa = x1; return; }
+      E.dim([xa, dimY - 150], [x1, dimY - 150], 150 + (k % 2) * 330, 'S' + (k + 1) + ' ' + (d.screw ? 'screw conveyor ' + mmTxt(d.length) + ' | run ' + mmTxt(d.horizontal) + (d.angle ? ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | ' + ang(Math.abs(d.angle)) : ' | level') : d.type === 'incline' ? 'incline run ' + mmTxt(d.horizontal) + ' | slope ' + mmTxt(Math.hypot(d.horizontal, d.rise)) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | ' + ang(Math.abs(d.angle)) : d.spiral ? 'spiral ' + mmTxt(d.length) + ' | rise ' + Math.round(Math.abs(d.rise) * MM) + ' | slope ' + ang(Math.abs(d.slopeDeg)) : d.type + ' ' + mmTxt(d.length)), 'calc');
       xa = x1;
     });
     E.line([xa, 0], [xa, dimY + 100], 'CENTRE');
@@ -432,6 +505,17 @@
     else add('Support legs', 'none drawn', I, (sc.hyd && sc.hyd.length) ? 'carried by the hydraulic / mobile stands' : (sc.spirals && sc.spirals.length ? 'carried by the spiral centre column and arms' : ''));
     if (sc.guideOn !== false) { add('Side guide rails', 'ON, both sides', E, 'option ticked or flat route'); add('Guide rail height above belt', mmS(sc.guideH) + ' mm', I, 'placeholder'); add('Guide rail thickness', '12 mm', I, 'placeholder'); add('Guide rail length (each side)', mmS(g.totalM) + ' mm', Cc, 'full route length'); }
     else add('Side guide rails / hand rails', 'NOT ADDED', E, 'option off on an incline, decline, hydraulic or spiral route');
+    (sc.bulk || []).forEach(function (b) {
+      var tg = (b.kind === 'bucket' ? 'Bucket elevator S' : 'Screw conveyor S') + b.seg + ' ';
+      if (b.kind === 'bucket') {
+        add(tg + 'lift height', mmS(b.lift) + ' mm', E, ''); add(tg + 'casing width', mmS(b.W) + ' mm', b.ent.W ? E : I, b.ent.W ? '' : 'placeholder'); add(tg + 'casing depth', mmS(b.D) + ' mm', b.ent.D ? E : I, b.ent.D ? '' : 'placeholder');
+        add(tg + 'bucket pitch', mmS(b.pitch) + ' mm', b.ent.pitch ? E : I, b.ent.pitch ? '' : 'placeholder'); add(tg + 'boot, head, hopper, chute, chain / belt, buckets, drive', 'drawn', I, 'illustrative only; engineering review required');
+      } else {
+        add(tg + 'screw length', mmS(b.length) + ' mm', E, b.angle ? 'along the trough' : 'level'); if (b.angle) add(tg + 'angle', Math.round(b.angle * 10) / 10 + ' deg', E, '');
+        add(tg + 'screw diameter', mmS(b.dia) + ' mm', b.ent.dia ? E : I, b.ent.dia ? '' : 'placeholder'); add(tg + 'flight pitch', mmS(b.pitch) + ' mm', b.ent.pitch ? E : I, b.ent.pitch ? '' : 'placeholder (= diameter)');
+        add(tg + 'trough, shaft, flights, hopper, spout, drive, hangers', 'drawn', I, 'illustrative only; engineering review required'); add(tg + 'support legs', String((b.legs || []).length) + ' off', I, 'placeholder spacing');
+      }
+    });
     (sc.spirals || []).forEach(function (q) {
       var d = M.inp.path.details[q.seg - 1], tag = 'Spiral S' + q.seg + ' ';
       add(tag + 'centre-line radius', mmS(d.radius) + ' mm', E, ''); add(tag + 'turns', String(Math.round(d.turns * 100) / 100), E, ''); add(tag + 'total rise', mmS(Math.abs(d.rise)) + ' mm', E, d.rise < 0 ? 'descending' : 'rising');
@@ -460,7 +544,7 @@
   function segSchedule(M) {
     var det = (M.inp.path && M.inp.path.details) || [], rows = det.map(function (d, k) {
       if (d.spiral) return ['S' + (k + 1), 'spiral ' + (d.direction === 'right' ? 'R' : 'L') + ' ' + (Math.round(d.turns * 100) / 100) + ' turns, pitch ' + mmS(d.pitch), mmS(d.length), mmS(d.radius), ang(d.angle) + ' sweep, slope ' + ang(Math.abs(d.slopeDeg)), mmS(d.horizontal), mmS(Math.abs(d.rise))];
-      return ['S' + (k + 1), d.type, mmS(d.length), d.type === 'curve' ? mmS(d.radius) : '-', d.type === 'curve' ? ang(d.angle) + ' ' + (d.direction === 'right' ? 'R' : 'L') : (d.type === 'incline' ? ang(Math.abs(d.angle)) : '-'), mmS(d.horizontal), d.type === 'incline' ? mmS(Math.abs(d.rise)) : '-'];
+      return ['S' + (k + 1), d.bucket ? 'bucket elevator' : d.screw ? 'screw conveyor' : d.type, mmS(d.length), d.type === 'curve' ? mmS(d.radius) : '-', d.type === 'curve' ? ang(d.angle) + ' ' + (d.direction === 'right' ? 'R' : 'L') : (d.type === 'incline' ? ang(Math.abs(d.angle)) : '-'), mmS(d.horizontal), d.type === 'incline' ? mmS(Math.abs(d.rise)) : '-'];
     });
     var e = M.desc.elevations;
     return { title: 'ROUTE SCHEDULE (calculated from entered data)', head: ['Seg', 'Type', 'Length (mm)', 'Radius (mm)', 'Angle', 'Horizontal run (mm)', 'Rise (mm)'], rows: rows, foot: 'Belt width ' + mmS(M.sc.geom.widthM) + ' mm | route length ' + mmS(M.sc.geom.totalM) + ' mm | inlet height ' + mmS(e.inletM) + ' mm | discharge height ' + mmS(e.dischargeM) + ' mm' };
@@ -808,7 +892,8 @@
       }
     });
     /* conveyor: double line + centre line */
-    V.poly(L1, false, 'OUTLINE'); V.poly(R1, false, 'OUTLINE'); V.line(L1[0], R1[0], 'OUTLINE'); V.line(L1[L1.length - 1], R1[R1.length - 1], 'OUTLINE');
+    var bulkRP = details.filter(function (d) { return d.screw || d.bucket; }).map(function (d) { return [tr.cum[d.p0], tr.cum[d.p1]]; });
+    bulkRunsPoly(V, L1, 'OUTLINE', sts, bulkRP); bulkRunsPoly(V, R1, 'OUTLINE', sts, bulkRP); (sc.bulk || []).forEach(function (b) { bulkPlan(V, b, { tH: tH, dims: true }); }); V.line(L1[0], R1[0], 'OUTLINE'); V.line(L1[L1.length - 1], R1[R1.length - 1], 'OUTLINE');
     V.poly(sts.map(function (st) { return [st.p[0] * MM, st.p[1] * MM]; }), false, 'CENTRE');
     add('Conveyor width', mmTxt(2 * hw), wEntered ? 'entered' : 'indicative *', wEntered ? '' : 'width not entered - illustrative');
     /* segments */
@@ -827,7 +912,12 @@
     }
     details.forEach(function (d, k) {
       var sE = sS + d.length, qa = tr.at(sS), qb = tr.at(sE), A = [qa.x * MM, qa.y * MM], B = [qb.x * MM, qb.y * MM], label = 'S' + (k + 1) + ' ', mid = (sS + sE) / 2, off = freeSide(sS, sE, hw * MM + 420);
-      if (d.spiral && d.centre) {
+      if (d.bucket) {
+        add(label + 'Bucket elevator', 'lift ' + mmTxt(d.length) + ' (' + ftTxt(d.length) + ')', 'entered', 'casing ' + (d.casingW && d.casingD ? mmTxt(d.casingW / 1000) + ' x ' + mmTxt(d.casingD / 1000) : 'size not entered *') + '; custom unit - engineering review');
+      } else if (d.screw) {
+        V.dim(A, B, off, label + 'Screw conveyor ' + mmTxt(d.length) + ' (' + ftTxt(d.length) + ')' + (d.angle ? ' @ ' + ang(Math.abs(d.angle)) : ''), 'calc');
+        add(label + 'Screw conveyor', mmTxt(d.length) + (d.angle ? ' @ ' + ang(Math.abs(d.angle)) : ', level'), 'entered', 'diameter ' + (d.unitDia ? mmTxt(d.unitDia / 1000) : 'not entered *') + '; custom unit - engineering review');
+      } else if (d.spiral && d.centre) {
         var cs = [d.centre.x * MM, d.centre.y * MM];
         V.circle(cs, d.radius * MM, 'CENTRE'); V.circle(cs, Math.max(0, d.radius - hw - thk) * MM, 'OUTLINE'); V.circle(cs, (d.radius + hw + thk) * MM, 'OUTLINE');
         V.text([cs[0], cs[1] - (d.radius + hw + thk) * MM - tH * 1.6], label + 'Spiral ' + (d.direction === 'right' ? 'R' : 'L') + ' R' + Math.round(d.radius * MM) + ' x ' + (Math.round(d.turns * 100) / 100) + ' turns, rise ' + mmTxt(Math.abs(d.rise)), tH * 0.8, 'DIM_CALC', { mid: true });
@@ -844,7 +934,7 @@
         V.dim(A, B, off, label + mmTxt(d.length) + ' (' + ftTxt(d.length) + ')', 'calc');
         add(label + 'Straight', mmTxt(d.length), 'entered', ftTxt(d.length));
       }
-      if (d.type !== 'curve' && !d.spiral && d.length * MM > aS * 8) { arrow(mid, aS); flowN++; } else if (d.type === 'curve' && d.length * MM > aS * 6) { arrow(mid, aS); flowN++; }
+      if (d.type !== 'curve' && !d.spiral && !d.bucket && d.length * MM > aS * 8) { arrow(mid, aS); flowN++; } else if (d.type === 'curve' && d.length * MM > aS * 6) { arrow(mid, aS); flowN++; }
       sS = sE;
     });
     if (!flowN) arrow((tr.length || sS) / 2, aS);

@@ -33,7 +33,7 @@
         floor: res.floor,
         recommendation: { recommendedId: cat.primaryId, selectedId: cat.selectedId, selectedName: cat.selected.name, alternatives: cat.alternatives, reasons: cat.reasons },
         path: res.path ? {
-          placement: res.path.placement, spiral: res.spiral || [], complete: res.path.complete, straight_m: res.path.straight, curved_m: res.path.curved, inclined_m: res.path.inclined,
+          placement: res.path.placement, spiral: res.spiral || [], bulk: res.bulk || [], complete: res.path.complete, straight_m: res.path.straight, curved_m: res.path.curved, inclined_m: res.path.inclined,
           total_m: res.path.total, horizontal_m: res.path.horizontal, netRise_m: res.path.netRise, status: res.path.totalStatus,
           segments: res.path.details.map(function (d) { return { index: d.index + 1, type: d.type, length_m: n(d.length, 4) * 1, horizontal_m: n(d.horizontal, 4) * 1 }; })
         } : null,
@@ -76,8 +76,8 @@
       var inl = typeof inp.inletHeight === 'number' && isFinite(inp.inletHeight) ? inp.inletHeight : null, pts = res.path.points;
       var hz = function (i) { return inl === null ? '-' : Math.round(inl + (pts[i].z || 0) * 1000) + ' mm'; };
       sections.push({ title: 'Dimension schedule (as drawn in the 3D view)', table: { head: ['No.', 'Type', 'Length', 'Details', 'Height start / end'], widths: [0.07, 0.17, 0.14, 0.4, 0.22], rows: res.path.details.map(function (d, i) {
-        var kind = d.type === 'straight' ? 'Straight' : d.spiral ? 'Spiral ' + (d.direction === 'right' ? 'right' : 'left') + (d.rise < 0 ? ' (descending)' : ' (rising)') : d.type === 'curve' ? 'Curve ' + (d.direction === 'right' ? 'right' : 'left') : (d.rise < 0 ? 'Decline' : 'Incline');
-        var det = d.spiral ? 'Radius ' + Math.round(d.radius * 1000) + ' mm, ' + (Math.round(d.turns * 100) / 100) + ' turns, rise ' + Math.round(Math.abs(d.rise) * 1000) + ' mm, pitch ' + Math.round(d.pitch * 1000) + ' mm, slope ' + (Math.round(Math.abs(d.slopeDeg) * 10) / 10) + ' deg' : d.type === 'curve' ? 'Radius ' + Math.round(d.radius * 1000) + ' mm, sweep ' + (Math.round(d.angle * 10) / 10) + ' deg' : d.type === 'incline' ? 'Run ' + n(d.horizontal, 3) + ' m, rise ' + Math.round(d.rise * 1000) + ' mm, slope ' + (Math.round(Math.abs(d.angle) * 10) / 10) + ' deg' : 'Run ' + n(d.horizontal, 3) + ' m';
+        var kind = d.bucket ? 'Bucket elevator' : d.screw ? 'Screw conveyor' : d.type === 'straight' ? 'Straight' : d.spiral ? 'Spiral ' + (d.direction === 'right' ? 'right' : 'left') + (d.rise < 0 ? ' (descending)' : ' (rising)') : d.type === 'curve' ? 'Curve ' + (d.direction === 'right' ? 'right' : 'left') : (d.rise < 0 ? 'Decline' : 'Incline');
+        var det = d.bucket ? 'Lift ' + Math.round(d.length * 1000) + ' mm (custom unit, engineering review)' : d.screw ? 'Length ' + n(d.length, 3) + ' m' + (d.angle ? ', ' + (Math.round(Math.abs(d.angle) * 10) / 10) + ' deg' : ', level') + (d.unitDia ? ', dia ' + Math.round(d.unitDia) + ' mm' : ', dia not entered') + ' (custom unit, engineering review)' : d.spiral ? 'Radius ' + Math.round(d.radius * 1000) + ' mm, ' + (Math.round(d.turns * 100) / 100) + ' turns, rise ' + Math.round(Math.abs(d.rise) * 1000) + ' mm, pitch ' + Math.round(d.pitch * 1000) + ' mm, slope ' + (Math.round(Math.abs(d.slopeDeg) * 10) / 10) + ' deg' : d.type === 'curve' ? 'Radius ' + Math.round(d.radius * 1000) + ' mm, sweep ' + (Math.round(d.angle * 10) / 10) + ' deg' : d.type === 'incline' ? 'Run ' + n(d.horizontal, 3) + ' m, rise ' + Math.round(d.rise * 1000) + ' mm, slope ' + (Math.round(Math.abs(d.angle) * 10) / 10) + ' deg' : 'Run ' + n(d.horizontal, 3) + ' m';
         return ['S' + (i + 1), kind, n(d.length, 3) + ' m', det, hz(d.p0) + ' / ' + hz(d.p1)];
       }) } });
     }
